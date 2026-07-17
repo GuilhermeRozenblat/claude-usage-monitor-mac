@@ -1,0 +1,20 @@
+.DS_Store
+.build/
+.swiftpm/
+DerivedData/
+dist/
+*.xcuserstate
+xcuserdata/
+.env
+.env.local
+.env.*.local
+*.p12
+*.cer
+*.pem
+*.key
+*.mobileprovision
+*.provisionprofile
+
+# Estado local de ferramentas
+.impeccable/
+.claude/settings.local.json
