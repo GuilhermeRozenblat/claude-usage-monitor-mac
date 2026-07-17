@@ -111,6 +111,12 @@ enum SettingsManager {
     }
 
     private static func writeObject(_ object: [String: Any], to file: URL) throws {
+        // Escreve no destino do link, não por cima dele. A gravação atômica
+        // troca o arquivo por outro e substituiria o link por uma cópia solta:
+        // quem mantém `~/.claude/settings.json` apontado para um repositório de
+        // dotfiles ficava com o link desfeito e o repositório congelado no
+        // conteúdo antigo, sem aviso nenhum.
+        let file = file.resolvingSymlinksInPath()
         try FileManager.default.createDirectory(
             at: file.deletingLastPathComponent(),
             withIntermediateDirectories: true,

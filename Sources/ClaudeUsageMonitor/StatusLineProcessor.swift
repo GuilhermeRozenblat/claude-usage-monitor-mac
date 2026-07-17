@@ -80,7 +80,9 @@ enum StatusLineProcessor {
             HistoryStore(paths: store.paths).append(
                 fiveHour: state.fiveHourUsage,
                 sevenDay: state.sevenDayUsage,
-                cost: state.session?.estimatedCostUSD
+                cost: state.session?.estimatedCostUSD,
+                model: state.session?.modelDisplayName,
+                session: snapshot.sessionId
             )
         }
     }
@@ -133,8 +135,24 @@ private enum PreviousStatusLine {
 
         do {
             try process.run()
-            inputPipe.fileHandleForWriting.write(input)
-            try? inputPipe.fileHandleForWriting.close()
+
+            // EPIPE em vez de SIGPIPE, e só neste descritor. Escrever num pipe
+            // cujo leitor fechou mata o processo por omissão, e o leitor aqui é
+            // um comando de terceiro que costuma nem ler o stdin. Ignorar o
+            // sinal no `main` não bastava: quem chamasse este código de outro
+            // executável (os testes, por exemplo) continuava a morrer.
+            #if canImport(Darwin)
+            _ = fcntl(inputPipe.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
+            #endif
+
+            // A escrita sai da thread que cronometra. O buffer de um pipe é
+            // 64 KiB: um payload maior bloqueia até o filho ler, e um filho que
+            // nunca lê prendia aqui o ingest, antes mesmo de o timeout abaixo
+            // existir para ele.
+            DispatchQueue.global(qos: .userInitiated).async {
+                try? inputPipe.fileHandleForWriting.write(contentsOf: input)
+                try? inputPipe.fileHandleForWriting.close()
+            }
 
             if completed.wait(timeout: .now() + 1.5) == .timedOut {
                 process.terminate()

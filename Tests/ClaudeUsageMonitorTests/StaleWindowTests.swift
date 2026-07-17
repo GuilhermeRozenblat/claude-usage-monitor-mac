@@ -141,3 +141,97 @@ final class SelfHealingCacheTests: XCTestCase {
         XCTAssertEqual(store.load()?.fiveHourUsage, 30)
     }
 }
+
+/// O `state.json` é cache e vive numa pasta que o app oferece para abrir. Um
+/// valor impossível lá dentro tem de virar cache descartável, nunca um número
+/// na tela nem uma trava no arranque.
+final class CorruptStateTests: XCTestCase {
+    private func decode(_ json: String) -> StateLoadResult {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        let paths = AppPaths(
+            baseDirectory: root,
+            stateFile: root.appendingPathComponent("state.json"),
+            statusLineBackupFile: root.appendingPathComponent("previous-statusline.json"),
+            claudeSettingsFile: root.appendingPathComponent("settings.json")
+        )
+        try? Data(json.utf8).write(to: paths.stateFile)
+        return StateStore(paths: paths).loadResult()
+    }
+
+    func testAnImpossiblePercentageIsTreatedAsACorruptCache() {
+        // 1e19 decodificava, e `Int(1e19)` derruba o processo ao formatar.
+        guard case .invalid = decode(#"{"fiveHourUsage":1e19,"notifiedThresholds":[]}"#) else {
+            return XCTFail("percentagem impossível aceite como estado válido")
+        }
+        guard case .invalid = decode(#"{"fiveHourUsage":-5,"notifiedThresholds":[]}"#) else {
+            return XCTFail("percentagem negativa aceite como estado válido")
+        }
+        guard case .invalid = decode(#"{"sevenDayUsage":101,"notifiedThresholds":[]}"#) else {
+            return XCTFail("percentagem acima de 100 aceite como estado válido")
+        }
+    }
+
+    func testAValidPercentageStillLoads() {
+        guard case let .loaded(state) = decode(#"{"fiveHourUsage":53.1,"notifiedThresholds":[]}"#) else {
+            return XCTFail("estado válido recusado")
+        }
+        XCTAssertEqual(state.fiveHourUsage, 53.1)
+    }
+}
+
+/// A status line anterior é um processo filho que não controlamos: pode não ler
+/// o stdin, pode não terminar, e nada disso pode derrubar ou travar o ingest.
+final class PreviousStatusLineTests: XCTestCase {
+    private func store(previousCommand: String) throws -> StateStore {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        let paths = AppPaths(
+            baseDirectory: root,
+            stateFile: root.appendingPathComponent("state.json"),
+            statusLineBackupFile: root.appendingPathComponent("previous-statusline.json"),
+            claudeSettingsFile: root.appendingPathComponent("settings.json")
+        )
+        let backup: [String: Any] = [
+            "hadStatusLine": true,
+            "statusLine": ["type": "command", "command": previousCommand],
+        ]
+        try JSONSerialization.data(withJSONObject: backup).write(to: paths.statusLineBackupFile)
+        return StateStore(paths: paths)
+    }
+
+    /// O buffer de um pipe é 64 KiB. Com um payload maior e um comando que não
+    /// lê o stdin (o caso comum), o ingest morria de SIGPIPE e a status line do
+    /// utilizador desaparecia inteira, a nossa linha incluída.
+    func testALargePayloadSurvivesACommandThatIgnoresStdin() throws {
+        let payload = try JSONSerialization.data(withJSONObject: [
+            "rate_limits": ["five_hour": ["used_percentage": 10, "resets_at": 4_102_444_800]],
+            "enchimento": String(repeating: "x", count: 200_000),
+        ])
+        let output = try StatusLineProcessor.run(
+            input: payload,
+            store: store(previousCommand: "echo statusline-anterior")
+        )
+        XCTAssertTrue(output.contains("statusline-anterior"), "a linha do utilizador sumiu")
+        XCTAssertTrue(output.contains("10%"), "a nossa linha sumiu")
+    }
+
+    /// E um comando que trava tem de bater no timeout, não bloquear a escrita.
+    func testAHangingCommandDoesNotBlockTheIngest() throws {
+        let payload = try JSONSerialization.data(withJSONObject: [
+            "rate_limits": ["five_hour": ["used_percentage": 10, "resets_at": 4_102_444_800]],
+            "enchimento": String(repeating: "x", count: 200_000),
+        ])
+        let started = Date()
+        let output = try StatusLineProcessor.run(
+            input: payload,
+            store: store(previousCommand: "sleep 30")
+        )
+        XCTAssertLessThan(Date().timeIntervalSince(started), 5, "o ingest ficou preso na escrita")
+        XCTAssertTrue(output.contains("10%"))
+    }
+}

@@ -24,7 +24,7 @@ if [[ -n "$CODESIGN_IDENTITY" && "$CODESIGN_IDENTITY" != Developer\ ID\ Applicat
   exit 1
 fi
 
-if /usr/bin/xattr -r -p com.apple.quarantine "$ROOT" >/dev/null 2>&1; then
+if [[ -n "$(/usr/bin/xattr -r -p com.apple.quarantine "$ROOT" 2>/dev/null)" ]]; then
   echo "O projeto ainda contém arquivos em quarentena." >&2
   echo "Execute ./prepare-local.command antes de compilar." >&2
   exit 1

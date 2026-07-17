@@ -121,6 +121,35 @@ enum L10n {
     static var settingsAlerts: String { pick("Alerts", "Alertas", "Alertas") }
     static var settingsLanguage: String { pick("Language", "Idioma", "Idioma") }
     static var settingsStartup: String { pick("Startup", "Inicialização", "Inicio") }
+    static var settingsShortcut: String { pick("Shortcut", "Atalho", "Atajo") }
+    static func openWithShortcut(_ keys: String) -> String {
+        pick(
+            "Open the monitor with \(keys)",
+            "Abrir o monitor com \(keys)",
+            "Abrir el monitor con \(keys)"
+        )
+    }
+    static var settingsShortcutFooter: String {
+        pick(
+            "Works while the monitor runs in the background.",
+            "Funciona com o monitor em segundo plano.",
+            "Funciona con el monitor en segundo plano."
+        )
+    }
+    static func shortcutUnavailable(_ keys: String) -> String {
+        pick(
+            "Another app is already using \(keys). Free the shortcut there and try again.",
+            "Outro app já usa \(keys). Libere o atalho nele e tente de novo.",
+            "Otra app ya usa \(keys). Libera el atajo allí e inténtalo de nuevo."
+        )
+    }
+    static var couldNotEnableShortcut: String {
+        pick(
+            "Could not turn on the shortcut",
+            "Não foi possível ativar o atalho",
+            "No se pudo activar el atajo"
+        )
+    }
     static var settingsIntegration: String { pick("Integration", "Integração", "Integración") }
     static var settingsData: String { pick("Data", "Dados", "Datos") }
     static var settingsNotifications: String { pick("Notify me about", "Avisar sobre", "Avisarme sobre") }
@@ -617,6 +646,11 @@ enum L10n {
             "% del límite de tu plan"
         )
     }
+
+    static var modelSplitTitle: String {
+        pick("Where the usage went", "Para onde foi o consumo", "Adónde fue el consumo")
+    }
+    static var otherModels: String { pick("Others", "Outros", "Otros") }
 
     // MARK: Tendência e ritmo
 

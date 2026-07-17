@@ -15,6 +15,21 @@ struct RateLimits: Equatable {
 }
 
 struct SessionSnapshot: Codable, Equatable {
+    /// Os valores que o `state.json` traz batem com o que o payload permitiria.
+    ///
+    /// O payload é validado ao entrar, mas o cache era decodificado em bruto e
+    /// alimenta o mesmo formatador: um `contextUsedPercentage` absurdo derruba
+    /// o app ao virar texto, tal como derrubava pelas janelas de 5 h e 7 dias.
+    var isPlausible: Bool {
+        let percentages = [contextUsedPercentage, contextRemainingPercentage].compactMap { $0 }
+        guard percentages.allSatisfy({ $0.isFinite && (0 ... 100).contains($0) }) else { return false }
+        let counts = [contextWindowSize, contextInputTokens, contextOutputTokens, totalDurationMS]
+            .compactMap { $0 }
+        guard counts.allSatisfy({ $0 >= 0 }) else { return false }
+        if let cost = estimatedCostUSD, !cost.isFinite || cost < 0 { return false }
+        return true
+    }
+
     var modelDisplayName: String?
     var contextUsedPercentage: Double?
     var contextRemainingPercentage: Double?
@@ -99,10 +114,18 @@ struct UsageState: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        fiveHourUsage = try container.decodeIfPresent(Double.self, forKey: .fiveHourUsage)
-            ?? container.decodeIfPresent(Double.self, forKey: .legacyLastUsage)
+        fiveHourUsage = try Self.percentage(
+            container.decodeIfPresent(Double.self, forKey: .fiveHourUsage)
+                ?? container.decodeIfPresent(Double.self, forKey: .legacyLastUsage),
+            forKey: .fiveHourUsage,
+            in: container
+        )
         fiveHourResetAt = try container.decodeIfPresent(TimeInterval.self, forKey: .fiveHourResetAt)
-        sevenDayUsage = try container.decodeIfPresent(Double.self, forKey: .sevenDayUsage)
+        sevenDayUsage = try Self.percentage(
+            container.decodeIfPresent(Double.self, forKey: .sevenDayUsage),
+            forKey: .sevenDayUsage,
+            in: container
+        )
         sevenDayResetAt = try container.decodeIfPresent(TimeInterval.self, forKey: .sevenDayResetAt)
         notifiedThresholds = try container.decodeIfPresent([Int].self, forKey: .notifiedThresholds) ?? []
         sevenDayNotifiedThresholds = try container.decodeIfPresent(
@@ -120,7 +143,41 @@ struct UsageState: Codable, Equatable {
             ?? usageUpdatedAt
         lastIngestErrorAt = try container.decodeIfPresent(String.self, forKey: .lastIngestErrorAt)
         session = try container.decodeIfPresent(SessionSnapshot.self, forKey: .session)
+        // O contexto da sessão passa pelo mesmo formatador que as janelas, e
+        // portanto pela mesma trava: validar só as janelas deixava a porta
+        // aberta ao lado.
+        if let session, !session.isPlausible {
+            throw DecodingError.dataCorruptedError(
+                forKey: .session,
+                in: container,
+                debugDescription: "sessão com valores impossíveis"
+            )
+        }
         sessionUpdatedAt = try container.decodeIfPresent(String.self, forKey: .sessionUpdatedAt)
+    }
+
+    /// Uma percentagem do cache tem de ser uma percentagem.
+    ///
+    /// O payload já é validado ao entrar, mas o `state.json` era decodificado
+    /// em bruto, e um arquivo corrompido (ou editado à mão: o app tem um botão
+    /// que abre esta pasta) com `"fiveHourUsage": 1e19` decodificava sem queixa
+    /// e derrubava o app ao formatar o número, a cada arranque, para sempre.
+    /// Recusar aqui devolve `.invalid` ao StateStore, que descarta o cache e o
+    /// reconstrói no próximo payload: o utilizador não vê nada disto.
+    private static func percentage(
+        _ value: Double?,
+        forKey key: CodingKeys,
+        in container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> Double? {
+        guard let value else { return nil }
+        guard value.isFinite, (0 ... 100).contains(value) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: key,
+                in: container,
+                debugDescription: "percentagem fora de 0...100: \(value)"
+            )
+        }
+        return value
     }
 
     func encode(to encoder: Encoder) throws {
@@ -143,6 +200,11 @@ struct UsageState: Codable, Equatable {
 struct StatusLineSnapshot: Equatable {
     let rateLimits: RateLimits?
     let session: SessionSnapshot?
+    /// Identificador da sessão do Claude Code que emitiu o payload. Estável
+    /// durante a sessão e único entre sessões. Não vai para o `state.json`:
+    /// serve para carimbar a amostra do histórico, onde é o que permite somar
+    /// custo sem misturar sessões concorrentes (ver `CostAggregator`).
+    let sessionId: String?
 }
 
 private struct StatusLinePayload: Decodable {
@@ -150,6 +212,7 @@ private struct StatusLinePayload: Decodable {
     let model: ModelPayload?
     let workspace: WorkspacePayload?
     let contextWindow: ContextWindowPayload?
+    let sessionId: String?
     let sessionName: String?
     let version: String?
     let effort: EffortPayload?
@@ -161,6 +224,7 @@ private struct StatusLinePayload: Decodable {
         case model
         case workspace
         case contextWindow = "context_window"
+        case sessionId = "session_id"
         case sessionName = "session_name"
         case version
         case effort
@@ -191,13 +255,24 @@ private struct StatusLinePayload: Decodable {
 
         return StatusLineSnapshot(
             rateLimits: limits.hasValues ? limits : nil,
-            session: session.hasValues ? session : nil
+            session: session.hasValues ? session : nil,
+            sessionId: clean(sessionId)
         )
     }
 
+    /// Texto vindo do payload, pronto para exibir: sem espaço à volta, sem
+    /// caracteres de controlo e no máximo 120 caracteres.
+    ///
+    /// Os controlos saem porque este texto é impresso num terminal pelo
+    /// `--show`: um diretório com sequências de escape no nome chegava lá
+    /// inteiro e podia reescrever a linha.
     private func clean(_ value: String?) -> String? {
         guard let value else { return nil }
-        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let printable = value.unicodeScalars.filter {
+            !CharacterSet.controlCharacters.contains($0)
+        }
+        let normalized = String(String.UnicodeScalarView(printable))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return nil }
         return String(normalized.prefix(120))
     }

@@ -15,8 +15,13 @@ fi
 /bin/rm -f "$ARCHIVE"
 cd "$PARENT"
 
-# -X descarta metadados extras do macOS. Artefatos, credenciais e o histórico
-# do Git ficam fora do pacote; somente o código-fonte reproduzível é enviado.
+# -X descarta metadados extras do macOS. Artefatos, credenciais, estado local de
+# ferramentas e o histórico do Git ficam fora do pacote; somente o código-fonte
+# reproduzível é enviado.
+#
+# Os padrões de credenciais levam `*` antes do ponto: sem ele o zip só casava na
+# raiz do projeto, e um `.env` numa subpasta entrava no pacote apesar do
+# comentário aqui prometer o contrário.
 /usr/bin/zip -qry -X "$ARCHIVE" "$PROJECT" \
   -x "$PROJECT/.build/*" \
      "$PROJECT/.swiftpm/*" \
@@ -25,9 +30,10 @@ cd "$PARENT"
      "$PROJECT/DerivedData/*" \
      "$PROJECT/.DS_Store" \
      "$PROJECT/*/.DS_Store" \
-     "$PROJECT/.env" \
-     "$PROJECT/.env.local" \
-     "$PROJECT/.env.*.local" \
+     "$PROJECT/*.env" \
+     "$PROJECT/*.env.*" \
+     "$PROJECT/.claude/settings.local.json" \
+     "$PROJECT/.impeccable/*" \
      "$PROJECT/*.p12" \
      "$PROJECT/*.cer" \
      "$PROJECT/*.pem" \

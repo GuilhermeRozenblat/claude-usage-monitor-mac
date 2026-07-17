@@ -72,3 +72,38 @@ final class ChartSpanTests: XCTestCase {
         XCTAssertEqual(HistoryRange.window.rawValue, 0)
     }
 }
+
+/// O eixo da janela de 5 h é ancorado no reset, mas a carga do histórico começa
+/// em `agora − 5h`, que é antes. O pedaço entre os dois é da janela anterior.
+final class WindowClippingTests: XCTestCase {
+    /// Sem recorte, `xPosition` grampeava as amostras da janela anterior em
+    /// cima do eixo Y e o rodapé anunciava o pico delas como o da janela atual.
+    func testTheWindowRangeExcludesThePreviousWindow() {
+        let now = Date()
+        let span = ChartSpan.resolve(
+            range: .window,
+            resetAt: now.timeIntervalSince1970 + 4 * 3600,
+            now: now
+        )
+        // A janela atual começou há uma hora.
+        XCTAssertEqual(span.start, now.timeIntervalSince1970 - 3600, accuracy: 1)
+
+        // Como a janela de histórico carregada é de 5 h, quatro horas de
+        // amostras ficam fora do eixo: são da janela que já reiniciou. O reset
+        // cai entre duas amostras (a 60 s uma da outra, nunca no mesmo
+        // instante), então as da janela anterior estão todas antes do corte.
+        let loaded = (0 ..< 300).map { minute in
+            HistorySample(
+                t: now.timeIntervalSince1970 - Double(minute) * 60,
+                h5: minute > 60 ? 98 : 20,
+                d7: nil,
+                c: nil,
+                m: "Opus",
+                s: "A"
+            )
+        }
+        let clipped = loaded.filter { $0.t >= span.start && $0.t <= span.end }
+        XCTAssertEqual(clipped.count, 61, "só a hora decorrida da janela atual")
+        XCTAssertEqual(clipped.compactMap(\.h5).max(), 20, "o pico veio da janela anterior")
+    }
+}

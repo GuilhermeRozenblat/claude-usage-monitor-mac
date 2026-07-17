@@ -21,6 +21,228 @@ private final class ChartLegendSwatch: NSView {
     }
 }
 
+/// Para onde foi o consumo do período, repartido por modelo.
+///
+/// Só aparece com dois ou mais modelos. Com um só, a barra seria uma faixa
+/// cheia de uma cor, que num ecrã de limites se lê como "100% usado", e a
+/// legenda repetiria o modelo que os detalhes da sessão já mostram.
+final class ModelSplitView: NSView {
+    private let bar = ModelSplitBar()
+    private let rows = NSStackView()
+    private let caption = NSTextField(labelWithString: L10n.modelSplitTitle)
+
+    /// Quatro é o número de tons que a paleta separa (ver `Palette.modelShare`),
+    /// e também o que cabe sem esmagar o gráfico acima.
+    private static let maximumSegments = 4
+
+    private lazy var collapsed = heightAnchor.constraint(equalToConstant: 0)
+
+    init() {
+        super.init(frame: .zero)
+
+        caption.font = .systemFont(ofSize: 11)
+        caption.textColor = .secondaryLabelColor
+
+        rows.orientation = .vertical
+        rows.alignment = .leading
+        rows.spacing = 4
+
+        let stack = NSStackView(views: [caption, bar, rows])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 6
+        stack.setCustomSpacing(8, after: bar)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: topAnchor),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            // Alta o suficiente para o nome caber lá dentro; as barras de cada
+            // modelo continuam finas, que é o peso certo para uma lista.
+            bar.heightAnchor.constraint(equalToConstant: 18),
+            bar.widthAnchor.constraint(equalTo: widthAnchor),
+            rows.widthAnchor.constraint(equalTo: widthAnchor),
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    func show(_ shares: [ModelUsage.Share]) {
+        let shares = Self.capped(shares)
+        // Limpa antes de decidir esconder. Esta view é presa por constraints e
+        // não vive numa stack, então `isHidden` não a encolhe: escondida, ela
+        // continuava a ocupar a altura das linhas da renderização anterior, e
+        // com um modelo só (o caso comum) o gráfico perdia ~46 pt para um vão
+        // permanente que ninguém via de onde vinha.
+        rows.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        isHidden = shares.count < 2
+        collapsed.isActive = isHidden
+        guard !isHidden else { return }
+
+        bar.shares = shares
+        bar.showsLabels = true
+        bar.needsDisplay = true
+        for (index, share) in shares.enumerated() {
+            let row = ModelShareRowView(share: share, rank: index, percentage: Self.percentage(share.fraction))
+            rows.addArrangedSubview(row)
+            row.widthAnchor.constraint(equalTo: rows.widthAnchor).isActive = true
+        }
+        setAccessibilityElement(true)
+        setAccessibilityRole(.image)
+        setAccessibilityLabel(
+            "\(L10n.modelSplitTitle): " + shares
+                .map { "\($0.model) \(Self.percentage($0.fraction))" }
+                .joined(separator: ", ")
+        )
+    }
+
+    /// A cauda vira uma fatia só: cinco modelos rebentavam a legenda, e a
+    /// quinta fatia seria fina demais para se ver na barra.
+    private static func capped(_ shares: [ModelUsage.Share]) -> [ModelUsage.Share] {
+        guard shares.count > maximumSegments else { return shares }
+        let rest = shares.dropFirst(maximumSegments - 1).reduce(0) { $0 + $1.fraction }
+        return Array(shares.prefix(maximumSegments - 1))
+            + [ModelUsage.Share(model: L10n.otherModels, fraction: rest)]
+    }
+
+    /// Percentagem inteira: a barra já mostra a proporção exata, e "33,4%" ao
+    /// lado de um nome de modelo é precisão que ninguém pediu.
+    private static func percentage(_ fraction: Double) -> String {
+        "\(Int((fraction * 100).rounded()))%"
+    }
+
+}
+
+/// Uma linha por modelo: nome, a sua fatia como barra própria, e a percentagem.
+///
+/// A barra combinada acima compara os modelos entre si; estas comparam cada um
+/// com o período inteiro, que é a leitura que a fatia de uma barra empilhada
+/// não dá quando é estreita. A barra é também a amostra de cor da linha: um
+/// quadradinho ao lado dela seria a mesma cor duas vezes.
+private final class ModelShareRowView: NSView {
+    private let bar = ModelSplitBar()
+
+    init(share: ModelUsage.Share, rank: Int, percentage: String) {
+        super.init(frame: .zero)
+
+        let name = NSTextField(labelWithString: share.model)
+        name.font = .systemFont(ofSize: 11)
+        name.textColor = .labelColor
+        name.lineBreakMode = .byTruncatingTail
+        name.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        bar.shares = [share]
+        bar.rank = rank
+
+        let value = NSTextField(labelWithString: percentage)
+        value.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+        value.textColor = .secondaryLabelColor
+        value.alignment = .right
+
+        let row = NSStackView(views: [name, bar, value])
+        row.orientation = .horizontal
+        row.spacing = 8
+        row.alignment = .centerY
+        row.distribution = .fill
+        row.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(row)
+
+        NSLayoutConstraint.activate([
+            row.topAnchor.constraint(equalTo: topAnchor),
+            row.bottomAnchor.constraint(equalTo: bottomAnchor),
+            row.leadingAnchor.constraint(equalTo: leadingAnchor),
+            row.trailingAnchor.constraint(equalTo: trailingAnchor),
+            // Colunas fixas para os nomes e as percentagens alinharem entre
+            // linhas: sem isto cada linha assenta na sua largura e as barras
+            // começam em sítios diferentes.
+            name.widthAnchor.constraint(equalToConstant: 170),
+            value.widthAnchor.constraint(equalToConstant: 34),
+            bar.heightAnchor.constraint(equalToConstant: 6),
+        ])
+        setAccessibilityLabel("\(share.model) \(percentage)")
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        nil
+    }
+}
+
+private final class ModelSplitBar: NSView {
+    var shares: [ModelUsage.Share] = []
+    /// Onde as cores começam. Numa linha de um modelo só, a fatia mantém o tom
+    /// do lugar que ocupa na barra combinada.
+    var rank = 0
+    /// Escreve o nome do modelo dentro da fatia. Só a barra combinada o faz: as
+    /// linhas de cada modelo já têm o nome ao lado.
+    var showsLabels = false
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        let track = NSBezierPath(roundedRect: bounds, xRadius: bounds.height / 2, yRadius: bounds.height / 2)
+        NSColor.separatorColor.setFill()
+        track.fill()
+
+        // As fatias são recortadas pela pista: assim as pontas ficam
+        // arredondadas e as junções no meio ficam retas, sem desenhar cada
+        // segmento com um raio diferente.
+        NSGraphicsContext.saveGraphicsState()
+        track.addClip()
+        var x = bounds.minX
+        for (index, share) in shares.enumerated() {
+            let width = bounds.width * CGFloat(share.fraction)
+            let color = Palette.modelShare(rank: rank + index)
+            color.setFill()
+            NSBezierPath(rect: NSRect(x: x, y: bounds.minY, width: width, height: bounds.height)).fill()
+            if showsLabels {
+                drawLabel(share.model, in: NSRect(x: x, y: bounds.minY, width: width, height: bounds.height), on: color)
+            }
+            x += width
+
+            // Um fio do fundo entre fatias vizinhas. Tons da mesma família
+            // separam-se por luminosidade, e dois degraus seguidos encostados
+            // leem-se como uma mancha só; o corte diz onde uma acaba.
+            if index < shares.count - 1 {
+                NSColor.windowBackgroundColor.setFill()
+                NSBezierPath(rect: NSRect(x: x - 0.75, y: bounds.minY, width: 1.5, height: bounds.height)).fill()
+            }
+        }
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    /// O nome centrado na sua fatia, e só quando lá cabe inteiro.
+    ///
+    /// Nada de reticências: uma fatia estreita renderia "Op…", que não nomeia
+    /// nada e ainda suja a barra. O nome completo está na linha do modelo logo
+    /// abaixo, então aqui ele é um atalho, não a única via.
+    private func drawLabel(_ model: String, in slice: NSRect, on background: NSColor) {
+        let label = NSAttributedString(
+            string: model,
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 9.5, weight: .semibold),
+                .foregroundColor: Palette.ink(on: background),
+            ]
+        )
+        let size = label.size()
+        guard size.width + 12 <= slice.width else { return }
+        label.draw(at: NSPoint(
+            x: slice.midX - size.width / 2,
+            y: slice.midY - size.height / 2
+        ))
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+}
+
 enum HistoryRange: Int, CaseIterable {
     /// A janela de 5 h corrente, não as últimas 5 h. Ver `ChartSpan`.
     case window
@@ -88,6 +310,7 @@ final class HistoryWindowController: NSWindowController {
         action: nil
     )
     private let statsField = NSTextField(labelWithString: "")
+    private let modelSplit = ModelSplitView()
     private var range: HistoryRange = .day
     /// O reset da janela de 5 h, alimentado pelo MenuBarApp a cada reload: é o
     /// que ancora o eixo do range `.window`.
@@ -144,7 +367,7 @@ final class HistoryWindowController: NSWindowController {
         exportButton.controlSize = .small
         exportButton.font = .systemFont(ofSize: 11)
 
-        [rangeControl, legend, chart, statsField, exportButton].forEach {
+        [rangeControl, legend, chart, modelSplit, statsField, exportButton].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview($0)
         }
@@ -157,7 +380,10 @@ final class HistoryWindowController: NSWindowController {
             chart.topAnchor.constraint(equalTo: rangeControl.bottomAnchor, constant: 10),
             chart.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
             chart.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
-            chart.bottomAnchor.constraint(equalTo: statsField.topAnchor, constant: -8),
+            chart.bottomAnchor.constraint(equalTo: modelSplit.topAnchor, constant: -10),
+            modelSplit.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
+            modelSplit.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
+            modelSplit.bottomAnchor.constraint(equalTo: statsField.topAnchor, constant: -10),
             statsField.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
             statsField.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -12),
             exportButton.centerYAnchor.constraint(equalTo: statsField.centerYAnchor),
@@ -244,14 +470,20 @@ final class HistoryWindowController: NSWindowController {
 
     private func refresh(now: Date = Date()) {
         let span = ChartSpan.resolve(range: range, resetAt: fiveHourResetAt, now: now)
-        // O histórico carrega-se a partir de agora, e a janela de 5 h começa
-        // sempre depois de `agora − 5h` (o reset está no futuro), então o
-        // intervalo de carga cobre-a inteira.
-        let samples = HistoryStore.downsample(
-            store.load(range: range.seconds, now: now),
-            limit: 500
-        )
+        // Recortado ao eixo, e não só carregado: o intervalo de carga cobre a
+        // janela de 5 h mas começa antes dela (a carga vai de `agora − 5h` e a
+        // janela começa em `reset − 5h`, que é depois). As amostras nesse
+        // pedaço são da janela ANTERIOR: sem recorte, o `xPosition` grampeava-as
+        // todas em cima do eixo Y (uma cerca vertical de 0 a 98% colada ao
+        // 0%) e o rodapé anunciava o pico delas ("Pico: 5 h 97,5%") como se
+        // fosse o da janela em curso, que ia em 20%.
+        let raw = store.load(range: range.seconds, now: now)
+            .filter { $0.t >= span.start && $0.t <= span.end }
+        let samples = HistoryStore.downsample(raw, limit: 500)
         chart.show(samples: samples, range: range, span: span, now: now)
+        // A repartição sai das amostras cruas: o downsample fica com o pico de
+        // cada balde e descarta os degraus de onde a atribuição por modelo vem.
+        modelSplit.show(ModelUsage.split(raw))
 
         // O limite semanal não existe em todo plano, e cada janela pode faltar
         // por si só. A legenda e o rodapé seguem o que o payload de facto traz.
@@ -383,9 +615,17 @@ final class HistoryChartView: NSView {
                 .foregroundColor: NSColor.secondaryLabelColor,
             ]
         )
+        // Dentro do gráfico, encostado ao topo e ao lado da linha. A faixa acima
+        // do gráfico já é da nota do eixo e da leitura do cursor: com a janela
+        // recém-começada a linha fica à esquerda e saía "% do limite do seu
+        // planagora", uma palavra por cima da outra.
         let size = label.size()
-        let originX = min(max(x - size.width / 2, plot.minX), plot.maxX - size.width)
-        label.draw(at: NSPoint(x: originX, y: plot.maxY + 6))
+        let fitsRight = x + 5 + size.width <= plot.maxX
+        let origin = NSPoint(
+            x: fitsRight ? x + 5 : x - 5 - size.width,
+            y: plot.maxY - size.height - 3
+        )
+        label.draw(at: origin)
     }
 
     /// As cores são dinâmicas e resolvem-se sozinhas em `draw`, mas o AppKit
@@ -420,14 +660,20 @@ final class HistoryChartView: NSView {
             .foregroundColor: NSColor.secondaryLabelColor,
         ]
 
-        let note = NSAttributedString(
-            string: L10n.chartAxisNote,
-            attributes: [
-                .font: NSFont.systemFont(ofSize: 9.5, weight: .regular),
-                .foregroundColor: NSColor.tertiaryLabelColor,
-            ]
-        )
-        note.draw(at: NSPoint(x: plot.minX, y: plot.maxY + 6))
+        // A faixa acima do gráfico é uma linha só, e a leitura sob o cursor tem
+        // prioridade sobre a nota: com o cursor à esquerda, as duas escreviam no
+        // mesmo sítio, uma por cima da outra. A nota diz sempre o mesmo; a
+        // leitura é o que o utilizador foi lá buscar.
+        if hoverLocation == nil {
+            let note = NSAttributedString(
+                string: L10n.chartAxisNote,
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: 9.5, weight: .regular),
+                    .foregroundColor: NSColor.tertiaryLabelColor,
+                ]
+            )
+            note.draw(at: NSPoint(x: plot.minX, y: plot.maxY + 6))
+        }
 
         for value in stride(from: 0.0, through: 100, by: 25) {
             let y = yPosition(value, in: plot)

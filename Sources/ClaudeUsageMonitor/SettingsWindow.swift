@@ -10,6 +10,7 @@ import ServiceManagement
 final class SettingsWindowController: NSWindowController {
     init(
         alertPreferences: AlertPreferences,
+        shortcut: GlobalShortcut,
         onReconfigure: @escaping () -> Void,
         onDataFolder: @escaping () -> Void,
         onLanguageChange: @escaping () -> Void
@@ -33,6 +34,7 @@ final class SettingsWindowController: NSWindowController {
         tabs.tabStyle = .toolbar
         tabs.addTabViewItem(tab(
             GeneralPane(
+                shortcut: shortcut,
                 onReconfigure: onReconfigure,
                 onDataFolder: onDataFolder,
                 onLanguageChange: onLanguageChange
@@ -86,7 +88,11 @@ private class SettingsPane: NSViewController {
     /// Onde a coluna de controlos começa, e portanto quanto espaço sobra para
     /// o texto lá dentro.
     static let labelColumn: CGFloat = 150
-    static var contentWidth: CGFloat { width - labelColumn - margin * 2 }
+    /// Desconta também o espaçamento entre colunas: sem ele a conta dava 12 pt
+    /// a mais do que a coluna real, e a nota calculava a quebra numa largura
+    /// que não tinha, cortando a última palavra.
+    static var contentWidth: CGFloat { width - labelColumn - margin * 2 - columnSpacing }
+    private static let columnSpacing: CGFloat = 12
 
     private let grid = NSGridView(numberOfColumns: 2, rows: 0)
     private var header: NSView?
@@ -95,7 +101,7 @@ private class SettingsPane: NSViewController {
         view = NSView()
         grid.translatesAutoresizingMaskIntoConstraints = false
         grid.rowSpacing = 10
-        grid.columnSpacing = 12
+        grid.columnSpacing = Self.columnSpacing
         grid.column(at: 0).xPlacement = .trailing
         grid.column(at: 1).xPlacement = .leading
         view.addSubview(grid)
@@ -271,16 +277,20 @@ private final class IdentityHeaderView: NSView {
 // MARK: - Geral
 
 private final class GeneralPane: SettingsPane {
+    private let shortcut: GlobalShortcut
     private let onReconfigure: () -> Void
     private let onDataFolder: () -> Void
     private let onLanguageChange: () -> Void
     private let loginCheckbox = NSButton()
+    private let shortcutCheckbox = NSButton()
 
     init(
+        shortcut: GlobalShortcut,
         onReconfigure: @escaping () -> Void,
         onDataFolder: @escaping () -> Void,
         onLanguageChange: @escaping () -> Void
     ) {
+        self.shortcut = shortcut
         self.onReconfigure = onReconfigure
         self.onDataFolder = onDataFolder
         self.onLanguageChange = onLanguageChange
@@ -302,6 +312,14 @@ private final class GeneralPane: SettingsPane {
         loginCheckbox.target = self
         loginCheckbox.action = #selector(toggleLogin)
         section(L10n.settingsStartup, loginCheckbox)
+
+        shortcutCheckbox.setButtonType(.switch)
+        shortcutCheckbox.title = L10n.openWithShortcut(GlobalShortcut.displayName)
+        shortcutCheckbox.state = shortcut.isEnabled ? .on : .off
+        shortcutCheckbox.target = self
+        shortcutCheckbox.action = #selector(toggleShortcut)
+        section(L10n.settingsShortcut, shortcutCheckbox)
+        footnote(L10n.settingsShortcutFooter)
 
         let popup = NSPopUpButton()
         for preference in LanguagePreference.allCases {
@@ -380,6 +398,25 @@ private final class GeneralPane: SettingsPane {
             alert.runModal()
         }
         refreshLoginState()
+    }
+
+    /// O sistema recusa a combinação se outro app a registou primeiro. Nesse
+    /// caso a caixa volta atrás: deixá-la ligada prometia um atalho que não
+    /// existe.
+    @objc private func toggleShortcut(_ sender: NSButton) {
+        guard shortcut.setEnabled(sender.state == .on) else {
+            sender.state = .off
+            let alert = NSAlert()
+            alert.messageText = L10n.couldNotEnableShortcut
+            alert.informativeText = L10n.shortcutUnavailable(GlobalShortcut.displayName)
+            alert.alertStyle = .warning
+            if let window = view.window {
+                alert.beginSheetModal(for: window)
+            } else {
+                alert.runModal()
+            }
+            return
+        }
     }
 
     @objc private func reconfigure() { onReconfigure() }

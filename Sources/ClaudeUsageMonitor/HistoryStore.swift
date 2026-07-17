@@ -9,12 +9,29 @@ struct HistorySample: Codable, Equatable {
     let d7: Double?
     /// Custo de API cumulativo da sessão corrente no momento da amostra.
     var c: Double?
+    /// Modelo ativo na amostra, como o Claude Code o nomeia. É o que permite
+    /// dizer para onde foi o consumo; a status line não reparte os limites por
+    /// modelo, mas diz qual estava a responder.
+    var m: String?
+    /// Sessão do Claude Code que emitiu a amostra (`session_id`). O custo em
+    /// `c` é acumulado por sessão e este arquivo é comum a todas: sem isto não
+    /// dá para somar custo sem misturar sessões (ver `CostAggregator`).
+    var s: String?
 
-    init(t: TimeInterval, h5: Double?, d7: Double?, c: Double? = nil) {
+    init(
+        t: TimeInterval,
+        h5: Double?,
+        d7: Double?,
+        c: Double? = nil,
+        m: String? = nil,
+        s: String? = nil
+    ) {
         self.t = t
         self.h5 = h5
         self.d7 = d7
         self.c = c
+        self.m = m
+        self.s = s
     }
 
     var date: Date { Date(timeIntervalSince1970: t) }
@@ -35,7 +52,14 @@ struct HistoryStore {
         self.paths = paths
     }
 
-    func append(fiveHour: Double?, sevenDay: Double?, cost: Double? = nil, now: Date = Date()) {
+    func append(
+        fiveHour: Double?,
+        sevenDay: Double?,
+        cost: Double? = nil,
+        model: String? = nil,
+        session: String? = nil,
+        now: Date = Date()
+    ) {
         guard fiveHour != nil || sevenDay != nil else { return }
         let stateStore = StateStore(paths: paths)
         guard (try? stateStore.secureDirectory(paths.baseDirectory)) != nil else { return }
@@ -48,7 +72,14 @@ struct HistoryStore {
                 return
             }
 
-            let sample = HistorySample(t: timestamp, h5: fiveHour, d7: sevenDay, c: cost)
+            let sample = HistorySample(
+                t: timestamp,
+                h5: fiveHour,
+                d7: sevenDay,
+                c: cost,
+                m: model,
+                s: session
+            )
             var data = try JSONEncoder().encode(sample)
             data.append(0x0A)
 
@@ -66,16 +97,54 @@ struct HistoryStore {
         }
     }
 
+    /// Quanto se lê da cauda na primeira tentativa. Uma amostra ocupa ~90 B,
+    /// então 1 MiB cobre cerca de oito dias: o suficiente para o caminho
+    /// quente (o app recarrega os últimos 7 dias a cada ingestão) resolver-se
+    /// numa leitura só, em vez de ler a cauda duas vezes.
+    private static let initialTailSize: UInt64 = 1024 * 1024
+
     /// Amostras dentro de `range` a partir de `now`, em ordem cronológica.
+    ///
+    /// Lê da cauda para trás, e não o arquivo inteiro: as amostras são
+    /// acrescentadas em ordem de tempo, então o que interessa está sempre no
+    /// fim. Na retenção cheia (90 dias, ~130 mil linhas, 11 MB) decodificar
+    /// tudo custava 271 ms **na thread principal**, a cada ingestão, para ficar
+    /// com as 300 linhas das últimas 5 h; e o painel abre com um `reload`
+    /// síncrono, ou seja, abria 271 ms depois do clique.
     func load(range: TimeInterval, now: Date = Date()) -> [HistorySample] {
         (try? FileLock.withExclusiveAccess(at: lockFile) {
-            guard let data = try? Data(contentsOf: paths.historyFile) else { return [] }
+            guard let handle = try? FileHandle(forReadingFrom: paths.historyFile),
+                  let size = try? handle.seekToEnd() else { return [] }
+            defer { try? handle.close() }
+
             let cutoff = now.timeIntervalSince1970 - range
             let decoder = JSONDecoder()
-            return data.split(separator: 0x0A).compactMap { line in
-                guard let sample = try? decoder.decode(HistorySample.self, from: line) else { return nil }
-                return sample.t >= cutoff && sample.t <= now.timeIntervalSince1970 + 60 ? sample : nil
-            }.sorted { $0.t < $1.t }
+            var tail = Self.initialTailSize
+
+            while true {
+                let atStart = tail >= size
+                let offset = atStart ? 0 : size - tail
+                try? handle.seek(toOffset: offset)
+                guard let data = try? handle.readToEnd() else { return [] }
+
+                var lines = data.split(separator: 0x0A)
+                // A primeira linha da janela costuma vir cortada ao meio; só é
+                // inteira quando a janela é o arquivo todo.
+                if !atStart, !lines.isEmpty {
+                    lines.removeFirst()
+                }
+                let samples = lines.compactMap { try? decoder.decode(HistorySample.self, from: $0) }
+
+                // Ou já se alcançou uma amostra anterior ao corte (e portanto
+                // todas as posteriores estão nesta janela), ou não há mais
+                // arquivo para trás.
+                if atStart || samples.first.map({ $0.t < cutoff }) == true {
+                    return samples
+                        .filter { $0.t >= cutoff && $0.t <= now.timeIntervalSince1970 + 60 }
+                        .sorted { $0.t < $1.t }
+                }
+                tail *= 4
+            }
         }) ?? []
     }
 
@@ -139,7 +208,9 @@ struct HistoryStore {
                     t: sample.t,
                     h5: maxOptional(current.h5, sample.h5),
                     d7: maxOptional(current.d7, sample.d7),
-                    c: maxOptional(current.c, sample.c)
+                    c: maxOptional(current.c, sample.c),
+                    m: sample.m ?? current.m,
+                    s: sample.s ?? current.s
                 )
                 buckets[index] = best
             } else {

@@ -17,7 +17,7 @@ fi
 /bin/chmod -R u+rwX "$ROOT"
 /bin/chmod u+x "$ROOT"/*.command
 
-if /usr/bin/xattr -r -p com.apple.quarantine "$ROOT" >/dev/null 2>&1; then
+if [[ -n "$(/usr/bin/xattr -r -p com.apple.quarantine "$ROOT" 2>/dev/null)" ]]; then
   echo "A quarentena ainda existe em algum arquivo do projeto." >&2
   exit 1
 fi

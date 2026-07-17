@@ -27,13 +27,13 @@ limites para assinaturas do Claude.ai.
 | Pro, Max, Team, Enterprise por assento | sim | sim |
 | Chave de API, Console, Bedrock, Vertex, Foundry | não | não |
 | Enterprise por consumo | não | não |
-| Free | sem acesso ao Claude Code | — |
+| Free | sem acesso ao Claude Code | nenhum |
 
 Com cobrança por token não existem janelas de uso: o consumo é faturado por
 token. Nesses casos o app diz isso em vez de esperar por dados que nunca chegam.
 
 Os planos Max têm ainda um limite semanal específico de Sonnet, e existe um
-limite por modelo do Opus. Nenhum dos dois aparece na status line — só o
+limite por modelo do Opus. Nenhum dos dois aparece na status line: só o
 comando `/usage` do Claude Code os mostra. Você pode atingir um desses limites
 sem que o monitor mostre 100%.
 
@@ -131,7 +131,7 @@ Em planos que não reportam o limite semanal, a série de 7 dias não aparece no
 gráfico nem na legenda. Os dados são coletados localmente pela
 própria ingestão (uma amostra por minuto, no máximo, com 90 dias de retenção)
 e podem ser apagados removendo `history.jsonl` na pasta de dados. Lacunas no
-gráfico correspondem a períodos sem uso do Claude Code — o app não inventa
+gráfico correspondem a períodos sem uso do Claude Code. O app não inventa
 pontos onde não houve dados. O botão **Exportar…** salva o histórico completo
 em CSV (`timestamp,five_hour_pct,seven_day_pct,session_cost_usd`).
 
@@ -139,7 +139,7 @@ em CSV (`timestamp,five_hour_pct,seven_day_pct,session_cost_usd`).
 
 Liga e desliga os alertas do limite de 5 horas, do limite de 7 dias e o aviso de
 janela reiniciada. Em **Notificar nos marcos** você escolhe o perfil: todos os
-marcos (padrão), a partir de 75% ou só críticos (90%+) — a mudança vale para as
+marcos (padrão), a partir de 75% ou só críticos (90%+). A mudança vale para as
 próximas notificações, sem alertas retroativos. **Silenciar alertas por 1 hora**
 segura tudo temporariamente; o item mostra o horário em que o silêncio termina.
 
@@ -178,6 +178,28 @@ macOS. Inglês, português (Brasil) e espanhol são suportados; se nenhum deles
 estiver configurado, o app usa inglês. Também é possível selecionar **English**,
 **Português (Brasil)** ou **Español** manualmente. A mudança é imediata e fica
 salva para as próximas execuções.
+
+### Para onde foi o consumo
+
+Sob o gráfico do histórico, uma barra empilhada reparte o consumo do período
+pelos modelos que responderam, com o nome de cada um escrito dentro da sua
+fatia, e abaixo dela cada modelo tem a sua própria barra com o nome e a
+percentagem. A empilhada compara os modelos entre si; as
+individuais comparam cada modelo com o período inteiro. Só aparecem quando dois
+ou mais modelos consumiram no período escolhido.
+
+A status line do Claude Code não informa limites separados por modelo, apenas o
+total e qual modelo estava ativo. Então isto é uma atribuição, não uma leitura:
+o que a janela sobe entre duas medições conta para o modelo da medição mais
+recente. Serve para responder "gastei em Opus ou em Sonnet?", não para auditar
+cobrança.
+
+### Atalho ⌥⌘U
+
+Em **Ajustes › Geral › Atalho**, desligado por padrão. Ligado, abre o painel com
+qualquer app à frente, sem pedir permissão de Acessibilidade. Se outro app já
+usa ⌥⌘U, o app avisa e a opção não liga: quem registrou primeiro fica com a
+combinação.
 
 ### `Sobre`
 

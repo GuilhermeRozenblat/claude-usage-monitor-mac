@@ -37,7 +37,7 @@ limites para assinaturas do Claude.ai.
 | Pro, Max, Team, Enterprise por assento | sim | sim |
 | Chave de API, Console, Bedrock, Vertex, Foundry | não | não |
 | Enterprise por consumo | não | não |
-| Free | sem acesso ao Claude Code | — |
+| Free | sem acesso ao Claude Code | nenhum |
 
 Com cobrança por token não existem janelas de uso: o consumo é faturado por
 token e a
@@ -45,20 +45,20 @@ token e a
 afirma que `rate_limits` *"won't show up when using API keys directly"*. O app
 detecta esse caso e diz isso, em vez de esperar por dados que nunca chegam.
 
-Cada janela pode faltar por si só, mesmo com a outra presente — a documentação
+Cada janela pode faltar por si só, mesmo com a outra presente, e a documentação
 oficial registra o comportamento mas não lista as condições. Quando o limite de
 7 dias não vem, o app mostra "não enviado para este plano" e o gráfico esconde
 a série, em vez de desenhar uma legenda para uma linha inexistente.
 
 Os planos Max têm ainda um limite semanal específico de Sonnet, e existe um
-limite por modelo do Opus. **Nenhum dos dois aparece na status line** — só o
+limite por modelo do Opus. **Nenhum dos dois aparece na status line**: só o
 `/usage` os mostra. O monitor não pode exibir o que não recebe, e o tooltip do
 medidor de 7 dias diz isso.
 
 Os percentuais são sempre relativos ao limite do **seu** plano: a Anthropic
 publica apenas múltiplos relativos (Max 5x = "5 vezes o Pro"), nunca números
 absolutos. Por isso 50% num Pro e 50% num Max 20x significam consumos absolutos
-muito diferentes, mas a mesma coisa útil — metade do que você tem.
+muito diferentes, mas a mesma coisa útil: metade do que você tem.
 
 ## Instalação
 
@@ -136,7 +136,8 @@ Clique no item para ver:
 - mini-gráfico da janela de 5 h corrente, com o ritmo projetado ("no ritmo
   atual: 100% às 14:32") ou o pico da janela;
 - **Histórico de uso…** com a janela de 5 h corrente e gráficos de 24 h, 7, 30
-  e 90 dias (coletado localmente pela própria ingestão);
+  e 90 dias (coletado localmente pela própria ingestão), e a repartição do
+  consumo do período por modelo;
 - botões para atualizar a exibição, abrir o histórico e abrir o **Sobre**;
 - **Ajustes** (⌘,) com duas abas: **Geral** (início de sessão, idioma,
   integração, dados) e **Alertas** (tipos de alerta, marcos e pausa de 1 hora);

@@ -2,7 +2,7 @@
 
 ## Visão geral
 
-Claude Usage Monitor 3.5 é um app nativo AppKit para macOS. O mesmo executável
+Claude Usage Monitor 3.6 é um app nativo AppKit para macOS. O mesmo executável
 atua como app de barra de menus e como receptor da status line do Claude Code.
 
 A interface suporta inglês, português (pt-BR) e espanhol. No modo automático,
@@ -144,9 +144,19 @@ Um payload não vazio que falha no parse grava `lastIngestErrorAt` em
 falhou` enquanto não chega um payload válido mais recente.
 
 Quando o payload traz `rate_limits`, o ingest também acrescenta uma amostra em
-`history.jsonl` (`HistoryStore`): JSONL com `{t, h5, d7, c}`, throttle de 60s
+`history.jsonl` (`HistoryStore`): JSONL com `{t, h5, d7, c, m, s}` (`m` é o
+modelo ativo na amostra e `s` a sessão que a emitiu; sem `s` não dá para somar
+custo, porque o custo é acumulado por sessão e o arquivo é comum a todas),
+throttle de 60s
 pelo timestamp da última amostra válida, escrita com `O_APPEND` e retenção de
-90 dias — o prune roda no app, não no ingest.
+90 dias. O prune roda no app, não no ingest.
+
+`HistoryStore.load` lê da cauda para trás, alargando a janela só se ela ainda
+não alcançou o período pedido. As amostras são acrescentadas em ordem de tempo,
+então o que interessa está sempre no fim: na retenção cheia, decodificar o
+arquivo inteiro custava 267 ms na thread principal a cada ingestão para ficar
+com as 300 linhas das últimas 5 h. A poda roda no arranque e uma vez por dia,
+porque um app de barra de menus fica meses ligado.
 
 `FileLock.swift` fornece locks cooperativos entre processos. O ciclo completo
 de leitura/modificação/gravação de `state.json` é serializado para que sessões
@@ -161,8 +171,15 @@ durante a substituição atômica feita pela poda.
 janela de 5h atinge 100%; a projeção só aparece com ritmo ≥ 2 pontos/h, dado
 fresco e reset posterior à projeção. `CostAggregator` estima o custo de um
 período somando os aumentos do custo cumulativo por sessão (quedas indicam
-sessão nova). A `TrendView` do painel mostra a sparkline da janela de 5h
-corrente e a projeção; o app relê o `history.jsonl` apenas quando o mtime muda.
+sessão nova), **por sessão**: as amostras de sessões concorrentes intercalam-se
+no mesmo arquivo, e somar a série como se fosse uma só lia cada alternância como
+sessão nova e voltava a somar o custo inteiro da outra. `ModelUsage.split` usa a
+mesma regra de incrementos para repartir
+a subida da janela pelos modelos: entre duas amostras, o que subiu conta para o
+modelo da mais recente. É atribuição, não leitura, porque a status line não
+manda `limits[]` por modelo.
+
+A `TrendView` do painel mostra a sparkline da janela de 5h corrente e a projeção; o app relê o `history.jsonl` apenas quando o mtime muda.
 
 ### `HistoryWindow.swift`
 
@@ -173,6 +190,23 @@ recessivo em 0-100%, referência tracejada em 90%, quebra de linha em lacunas
 sem amostras (não interpola períodos sem uso), downsample para ≤500 pontos
 preservando picos, crosshair com leitura de valores sob o cursor e pico do
 período no rodapé.
+
+`ModelSplitView` fica entre o gráfico e o rodapé: barra repartida com legenda,
+alimentada por `ModelUsage.split` sobre as amostras **cruas** (o downsample fica
+com o pico de cada balde e descarta os degraus de onde a atribuição sai). Some
+sozinha com menos de dois modelos, e agrega a cauda em "Outros" a partir do
+quinto. Abaixo da barra empilhada, uma `ModelShareRowView` por modelo (nome,
+barra própria, percentagem), com colunas fixas para alinharem entre linhas.
+
+As fatias usam `Palette.modelShare`: tons opacos separados sobretudo por
+**luminosidade** (sob deuteranopia o eixo vermelho-verde desaparece; a
+luminosidade e o amarelo-azul ficam), com deriva de matiz por cima para somar
+separação a quem vê as cores todas. Cada tom mede ≥3:1 contra o fundo da janela
+e ≥4.5:1 contra a sua tinta (`Palette.ink`, que escolhe preto ou branco pela
+luminância medida), verificado em `ModelShareContrastTests`. São três degraus mais um neutro: o quarto degrau de
+laranja não alcança os 3:1 em nenhum dos modos, e o neutro é também o que
+"Outros" quer dizer. Entre fatias vizinhas vai um fio da cor do fundo, porque
+dois degraus de luminosidade encostados leem-se como uma mancha só.
 
 `ChartSpan` resolve o intervalo do eixo. A janela de 5h é ancorada no reset
 (`resets_at − 5h` até `resets_at`), não em "agora": um range rolante de
@@ -200,6 +234,15 @@ anel de doze traços que acendem em sequência, e os blocos entram em cascata de
 terceiros é terreno de marca registada. O fundo usa `NSVisualEffectView`, o
 equivalente translúcido nativo compatível com macOS 13, e se adapta ao modo
 claro/escuro. As animações respeitam **Reduzir movimento**.
+
+### `GlobalShortcut.swift`
+
+Atalho global opcional (⌥⌘U) via `RegisterEventHotKey` do Carbon, a API do
+sistema para atalhos globais e a única que não exige permissão de
+Acessibilidade (`NSEvent.addGlobalMonitorForEvents` exige). Desligado por
+padrão: um atalho global tira a combinação de todos os outros apps. Quando o
+sistema recusa o registro (outro app chegou primeiro), `setEnabled` devolve
+`false` e a caixa nos Ajustes recua em vez de prometer um atalho inexistente.
 
 ### `SettingsManager.swift`
 

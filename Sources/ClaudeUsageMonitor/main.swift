@@ -20,6 +20,12 @@ private func showCachedState() -> Int32 {
 
 let arguments = Set(CommandLine.arguments.dropFirst())
 
+// Escrever num pipe cujo leitor já fechou mata o processo com SIGPIPE, e o
+// processo aqui escreve no stdin de dois subprocessos que não controlamos (a
+// status line anterior e o `claude auth status`). Ignorado, o write devolve
+// EPIPE e quem chama trata o erro. Ver StatusLineProcessor.
+signal(SIGPIPE, SIG_IGN)
+
 do {
     if arguments.contains("--ingest-statusline") {
         let input = FileHandle.standardInput.readDataToEndOfFile()

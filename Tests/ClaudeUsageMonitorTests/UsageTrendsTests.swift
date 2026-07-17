@@ -83,29 +83,31 @@ final class UsageTrendsTests: XCTestCase {
 
     // MARK: - CostAggregator
 
+    // As amostras carregam a sessão que as emitiu: sem isso o custo não é
+    // atribuível e fica de fora da soma (ver CostPerSessionTests).
     func testAccumulatesIncreasesWithinSession() {
         let samples = [0.10, 0.25, 0.40].enumerated().map { index, cost in
-            HistorySample(t: Double(index), h5: 1, d7: nil, c: cost)
+            HistorySample(t: Double(index), h5: 1, d7: nil, c: cost, m: nil, s: "A")
         }
         XCTAssertEqual(CostAggregator.accumulatedCost(samples)!, 0.30, accuracy: 0.0001)
     }
 
     func testCostDropCountsAsNewSession() {
         let samples = [0.50, 0.80, 0.05, 0.20].enumerated().map { index, cost in
-            HistorySample(t: Double(index), h5: 1, d7: nil, c: cost)
+            HistorySample(t: Double(index), h5: 1, d7: nil, c: cost, m: nil, s: "A")
         }
-        // +0,30 (0,50→0,80), sessão nova entra com 0,05, +0,15 → 0,50.
+        // +0,30 (0,50→0,80), a sessão recomeçou e 0,05 entra inteiro, +0,15 → 0,50.
         XCTAssertEqual(CostAggregator.accumulatedCost(samples)!, 0.50, accuracy: 0.0001)
     }
 
     func testCostNilWithoutEnoughData() {
         XCTAssertNil(CostAggregator.accumulatedCost([]))
         XCTAssertNil(CostAggregator.accumulatedCost([
-            HistorySample(t: 0, h5: 1, d7: nil, c: 0.5),
+            HistorySample(t: 0, h5: 1, d7: nil, c: 0.5, m: nil, s: "A"),
         ]))
         XCTAssertNil(CostAggregator.accumulatedCost([
-            HistorySample(t: 0, h5: 1, d7: nil),
-            HistorySample(t: 1, h5: 2, d7: nil),
+            HistorySample(t: 0, h5: 1, d7: nil, c: nil, m: nil, s: "A"),
+            HistorySample(t: 1, h5: 2, d7: nil, c: nil, m: nil, s: "A"),
         ]))
     }
 
@@ -149,5 +151,76 @@ final class UsageTrendsTests: XCTestCase {
         let legacy = Data(#"{"t":1784000000,"h5":40,"d7":20}"#.utf8)
         let decoded = try JSONDecoder().decode(HistorySample.self, from: legacy)
         XCTAssertNil(decoded.c)
+    }
+}
+
+/// O custo é acumulado por sessão do Claude Code, mas o `history.jsonl` é um só
+/// para todas elas.
+final class CostPerSessionTests: XCTestCase {
+    private func sample(_ t: Double, cost: Double, session: String?) -> HistorySample {
+        HistorySample(t: t, h5: nil, d7: nil, c: cost, m: nil, s: session)
+    }
+
+    /// Dois projetos abertos ao mesmo tempo: as amostras intercalam-se e cada
+    /// alternância parecia uma sessão nova, somando de novo o custo inteiro da
+    /// outra. Seis amostras bastavam para relatar US$ 6,22 onde se gastou 0,12.
+    func testInterleavedSessionsDoNotInflateTheTotal() throws {
+        let samples = [
+            sample(0, cost: 3.00, session: "A"),
+            sample(60, cost: 0.05, session: "B"),
+            sample(120, cost: 3.05, session: "A"),
+            sample(180, cost: 0.06, session: "B"),
+            sample(240, cost: 3.10, session: "A"),
+            sample(300, cost: 0.07, session: "B"),
+        ]
+        let total = try XCTUnwrap(CostAggregator.accumulatedCost(samples))
+        // A subiu 0,10 e B subiu 0,02. Mais nada aconteceu.
+        XCTAssertEqual(total, 0.12, accuracy: 0.0001)
+    }
+
+    /// Dentro de uma sessão o custo zera quando ela recomeça, e aí o valor
+    /// corrente conta inteiro.
+    func testCostResetWithinASessionCountsInFull() throws {
+        let total = try XCTUnwrap(CostAggregator.accumulatedCost([
+            sample(0, cost: 1.00, session: "A"),
+            sample(60, cost: 1.50, session: "A"),
+            sample(120, cost: 0.20, session: "A"),
+        ]))
+        XCTAssertEqual(total, 0.70, accuracy: 0.0001)
+    }
+
+    /// A primeira amostra de cada sessão é linha de base: o que ela gastou
+    /// antes do período não pertence ao período.
+    func testTheFirstSampleOfEachSessionIsABaseline() throws {
+        let total = try XCTUnwrap(CostAggregator.accumulatedCost([
+            sample(0, cost: 9.00, session: "A"),
+            sample(60, cost: 9.25, session: "A"),
+        ]))
+        XCTAssertEqual(total, 0.25, accuracy: 0.0001)
+    }
+
+    /// Amostras gravadas antes de existir o campo não dão para atribuir.
+    /// Preferimos não somar a somar errado.
+    func testLegacySamplesWithoutASessionAreIgnored() {
+        XCTAssertNil(CostAggregator.accumulatedCost([
+            sample(0, cost: 3.00, session: nil),
+            sample(60, cost: 0.05, session: nil),
+        ]))
+    }
+
+    /// O caso da atualização: o período tem amostras novas e antigas. Somar só
+    /// as novas daria um número menor que o gasto real, e sem dizer que é
+    /// parcial. Melhor assumir que não se sabe até as antigas saírem da janela.
+    func testAPeriodMixingOldAndNewSamplesHasNoTrustworthyTotal() {
+        XCTAssertNil(CostAggregator.accumulatedCost([
+            sample(0, cost: 3.00, session: nil),
+            sample(60, cost: 3.20, session: nil),
+            sample(120, cost: 0.05, session: "A"),
+            sample(180, cost: 0.25, session: "A"),
+        ]))
+    }
+
+    func testASingleSampleInASessionHasNothingToMeasure() {
+        XCTAssertNil(CostAggregator.accumulatedCost([sample(0, cost: 3.00, session: "A")]))
     }
 }

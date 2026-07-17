@@ -3,8 +3,12 @@
 ## Dados processados
 
 O executável recebe o JSON completo da status line em `stdin`, mas decodifica
-somente limites, contexto, modelo, nome de sessão, nome curto do projeto, versão,
-esforço, thinking, duração e custo API estimado.
+somente limites, contexto, modelo, identificador e nome de sessão, nome curto do
+projeto, versão, esforço, thinking, duração e custo API estimado. O
+`session_id` fica apenas nas amostras do histórico, onde é o que permite somar
+custo sem misturar sessões concorrentes; não vai para o `state.json`. Texto do
+payload perde caracteres de controlo e é truncado em 120 caracteres antes de ser
+exibido ou gravado.
 
 O app ignora `transcript_path`, não persiste o caminho completo do projeto e não
 lê conversas. Para identificar a conta, executa `claude auth status` e lê somente
@@ -32,6 +36,11 @@ configuração confiada pelo usuário. O subprocesso usa `/bin/zsh`, timeout de 
 segundo, stderr descartado e coleta incremental limitada a 1 MiB. Se o comando
 não encerrar após `terminate`, o processo recebe `SIGKILL`.
 
+A escrita do payload no `stdin` do filho é feita fora da thread que cronometra,
+para que o timeout valha mesmo quando o comando nunca lê o stdin, e o descritor
+pede `F_SETNOSIGPIPE`: um leitor que fecha vira erro tratado, não um sinal que
+derruba o processo.
+
 O app não executa lifecycle scripts de pacotes e não possui dependências de
 runtime de terceiros.
 
@@ -39,6 +48,16 @@ Para mostrar a conta conectada, o app também executa diretamente o binário loc
 do Claude Code com `auth status --json`, em fila de background e com timeout de
 2 segundos. O stdout é usado apenas para o estado de autenticação; stderr é
 descartado.
+
+## Atalho global
+
+O atalho ⌥⌘U é opcional e vem desligado. Ligado, usa `RegisterEventHotKey` do
+Carbon, a API do sistema para atalhos globais: o macOS entrega ao app apenas
+essa combinação e nenhuma outra tecla. O app não pede nem usa permissão de
+Acessibilidade, que seria necessária para observar o teclado inteiro (é o que
+`NSEvent.addGlobalMonitorForEvents` exigiria), e portanto não tem como ver o que
+se digita em outros apps. A preferência fica em UserDefaults; nada é gravado
+fora do app.
 
 ## Assinatura
 

@@ -27,6 +27,60 @@ enum Palette {
             : NSColor(srgbRed: 0x32 / 255, green: 0x68 / 255, blue: 0xA0 / 255, alpha: 1)
     }
 
+    /// Tons para repartir consumo por modelo, do maior para o menor.
+    ///
+    /// Cores opacas, não a marca com alpha: transparência mistura-se com o que
+    /// está por baixo, e o tom mais fraco acabava a 1.5:1 contra o fundo, que
+    /// é invisível.
+    ///
+    /// Separam-se por luminosidade e não por matiz. Sob deuteranopia (a mais
+    /// comum) o eixo vermelho-verde desaparece e um laranja ao lado de um âmbar
+    /// viram a mesma cor; a diferença de luminosidade sobrevive a qualquer
+    /// daltonismo. Cada tom mede ≥3:1 contra o fundo da janela, o piso para um
+    /// elemento gráfico que carrega informação (ver ModelShareContrastTests).
+    ///
+    /// São três degraus quentes e não mais: o quarto já não alcança os 3:1 em
+    /// nenhum dos modos. Daí o neutro no fim, que é também o que "os outros"
+    /// quer dizer.
+    ///
+    /// Os degraus ocupam toda a faixa de luminosidade que o fundo permite, e a
+    /// matiz deriva por cima disso (o tom claro puxa ao amarelo, o escuro ao
+    /// vermelho). A deriva soma separação para quem vê as cores todas sem tirar
+    /// nada a quem não vê: no eixo amarelo-azul, que a deuteranopia preserva.
+    static func modelShare(rank: Int) -> NSColor {
+        NSColor(name: "ModelShare\(min(rank, 3))") { appearance in
+            let ramp = appearance.isDark
+                ? [(0xFF, 0xC6, 0x92), (0xE1, 0x79, 0x5C), (0xA6, 0x51, 0x48), (0x8E, 0x8E, 0x93)]
+                : [(0xCC, 0x6C, 0x3E), (0x9D, 0x37, 0x2B), (0x56, 0x1E, 0x1A), (0x6E, 0x6E, 0x73)]
+            let (red, green, blue) = ramp[min(rank, ramp.count - 1)]
+            return NSColor(
+                srgbRed: CGFloat(red) / 255,
+                green: CGFloat(green) / 255,
+                blue: CGFloat(blue) / 255,
+                alpha: 1
+            )
+        }
+    }
+
+    /// Preto ou branco, o que for legível sobre `background`.
+    ///
+    /// Escolhido pela luminância medida e não fixado numa das duas: a rampa dos
+    /// modelos atravessa toda a faixa de luminosidade, então nenhuma tinta
+    /// única serve para os dois extremos. Ver `ModelShareContrastTests`.
+    static func ink(on background: NSColor) -> NSColor {
+        guard let color = background.usingColorSpace(.sRGB) else { return .white }
+        func channel(_ value: CGFloat) -> Double {
+            let value = Double(value)
+            return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        let luminance = 0.2126 * channel(color.redComponent)
+            + 0.7152 * channel(color.greenComponent)
+            + 0.0722 * channel(color.blueComponent)
+        let onWhite = 1.05 / (luminance + 0.05)
+        let onBlack = (luminance + 0.05) / 0.05
+        return onBlack >= onWhite ? .black : .white
+    }
+
     /// Cor do medidor por severidade. Abaixo de 75% a marca; acima, o
     /// vocabulário semântico do sistema.
     static func meter(for percentage: Double?) -> NSColor {

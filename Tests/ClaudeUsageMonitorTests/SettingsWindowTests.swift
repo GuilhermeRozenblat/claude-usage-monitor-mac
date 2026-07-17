@@ -6,6 +6,7 @@ final class SettingsWindowTests: XCTestCase {
     private func controller() -> SettingsWindowController {
         SettingsWindowController(
             alertPreferences: AlertPreferences(defaults: scratchDefaults()),
+            shortcut: GlobalShortcut(defaults: scratchDefaults()),
             onReconfigure: {},
             onDataFolder: {},
             onLanguageChange: {}

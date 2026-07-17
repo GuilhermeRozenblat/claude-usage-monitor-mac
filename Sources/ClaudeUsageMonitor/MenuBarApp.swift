@@ -8,10 +8,12 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
     private let panel = MonitorPanelController()
 
     private let alertPreferences = AlertPreferences()
+    private let shortcut = GlobalShortcut()
     private var historyWindow: HistoryWindowController?
     private var aboutWindow: AboutWindowController?
     private var settingsWindow: SettingsWindowController?
     private var timer: Timer?
+    private var lastPruneAt: Date?
     private var stateWatcher: DispatchSourceFileSystemObject?
     private var integrationError: String?
     private var integrationStatus: IntegrationStatus = .misconfigured
@@ -36,24 +38,38 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
         alertPreferences.removeLegacyKeys()
         configureStatusItem()
         configurePanel()
+        configureShortcut()
         configureNotifications()
         installStatusLine()
         startWatchingStateDirectory()
         reload()
         refreshClaudeAccount(force: true)
 
-        let history = HistoryStore(paths: store.paths)
-        DispatchQueue.global(qos: .utility).async {
-            history.prune()
-        }
+        pruneHistory()
 
         // O watcher acorda o app quando o ingest grava state.json; o timer só
         // cobre transições dirigidas pelo relógio (countdowns, expiração,
         // dados obsoletos) e serve de fallback se o watcher falhar.
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             self?.reload()
+            self?.pruneHistory()
         }
         timer?.tolerance = 5
+    }
+
+    /// Aplica a retenção de 90 dias, no máximo uma vez por dia.
+    ///
+    /// A poda só corria no arranque, e este é um app de barra de menus: fica
+    /// meses ligado, e nesse tempo o histórico passava dos 90 dias prometidos
+    /// sem nunca ser podado. Reescreve o arquivo inteiro, por isso é diária e
+    /// fora da thread principal.
+    private func pruneHistory(now: Date = Date()) {
+        if let last = lastPruneAt, now.timeIntervalSince(last) < 24 * 3600 { return }
+        lastPruneAt = now
+        let history = HistoryStore(paths: store.paths)
+        DispatchQueue.global(qos: .utility).async {
+            history.prune()
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -100,6 +116,11 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
         button.target = self
         button.action = #selector(togglePanel)
         applyHealth(.waiting, detail: L10n.starting)
+    }
+
+    private func configureShortcut() {
+        shortcut.onTrigger = { [weak self] in self?.togglePanel() }
+        shortcut.restore()
     }
 
     private func configurePanel() {
@@ -201,11 +222,6 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
         }
     }
 
-    func menuWillOpen(_ menu: NSMenu) {
-        reload()
-        refreshClaudeAccount()
-    }
-
     @discardableResult
     private func reload() -> StateLoadResult {
         updateIntegrationItem()
@@ -250,10 +266,19 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.isRefreshingAccount = false
+                let previous = self.accountStatus
                 if status != .unavailable || self.accountStatus == .unavailable {
                     self.accountStatus = status
                 }
                 self.renderClaudeAccount()
+                // A conta muda o que os medidores dizem: quem cobra por chave
+                // de API não tem janelas de uso, e até esta resposta chegar o
+                // painel manda "envie uma mensagem no Claude Code" para esperar
+                // um limite que nunca vem. Sem isto, o conselho errado ficava
+                // na tela até o próximo ciclo de 30 s.
+                if previous != self.accountStatus {
+                    self.reload()
+                }
             }
         }
     }
@@ -1038,6 +1063,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
     @objc private func showSettings() {
         let controller = settingsWindow ?? SettingsWindowController(
             alertPreferences: alertPreferences,
+            shortcut: shortcut,
             onReconfigure: { [weak self] in self?.reconfigure() },
             onDataFolder: { [weak self] in self?.openDataFolder() },
             onLanguageChange: { [weak self] in
