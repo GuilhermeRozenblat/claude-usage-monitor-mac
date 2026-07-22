@@ -1,284 +1,188 @@
-# Claude Usage Monitor para macOS
+# Claude Usage Monitor for macOS
 
-App nativo de barra de menus que exibe a conta conectada, limites do plano,
-resets, uso do contexto e informações da sessão atual do Claude Code.
+A native menu bar app that shows your Claude Code account, plan limits, resets,
+context usage, and current session details.
 
 ```text
 ✓ 40%
 
-conta@exemplo.com
-Funcionando normalmente
-Limite de 5 horas      40%
-Limite de 7 dias       28%
-Contexto da sessão     18%
+account@example.com
+Running normally
+5-hour limit          40%
+7-day limit           28%
+Session context       18%
 ```
 
-Os dados de uso e sessão vêm exclusivamente dos campos oficiais enviados à
-[status line do Claude Code](https://code.claude.com/docs/en/statusline). Para o
-cabeçalho, o app confirma a sessão com
-[`claude auth status`](https://code.claude.com/docs/en/cli-usage) e lê somente o
-e-mail dos metadados locais do perfil; não lê nem persiste tokens. Ele não abre
-`claude.ai`, não usa Playwright, não faz scraping e não implementa cliente de
-rede.
+All data comes from the official fields Claude Code sends to its
+[status line](https://code.claude.com/docs/en/statusline). The app confirms the
+account with [`claude auth status`](https://code.claude.com/docs/en/cli-usage)
+and reads only the email from local profile metadata. It never reads or stores
+tokens, opens no network connection, and does no scraping.
 
-A interface acompanha automaticamente o idioma preferido do macOS em inglês,
-português (pt-BR) ou espanhol. Quando nenhum deles é encontrado, usa inglês
-como fallback. **Ajustes > Geral > Idioma** permite escolher outro idioma e
-salva a preferência. O binário de release é universal (Apple Silicon e Intel),
-macOS 13+.
+The interface follows your macOS language (English, Portuguese, or Spanish;
+English otherwise) and can be changed in **Settings > General > Language**. The
+release binary is universal (Apple Silicon and Intel), macOS 13+.
 
-## Planos suportados
+## Supported plans
 
-O monitor mostra o que a status line do Claude Code envia, e ela só envia
-limites para assinaturas do Claude.ai.
+Claude Code only sends limits for Claude.ai subscriptions.
 
-| Plano | Limite de 5 h | Limite de 7 dias |
+| Plan | 5-hour limit | 7-day limit |
 | --- | --- | --- |
-| Pro, Max, Team, Enterprise por assento | sim | sim |
-| Chave de API, Console, Bedrock, Vertex, Foundry | não | não |
-| Enterprise por consumo | não | não |
-| Free | sem acesso ao Claude Code | nenhum |
+| Pro, Max, Team, per-seat Enterprise | yes | yes |
+| API key, Console, Bedrock, Vertex, Foundry | no | no |
+| Usage-based Enterprise | no | no |
+| Free | no Claude Code access | none |
 
-Com cobrança por token não existem janelas de uso: o consumo é faturado por
-token e a
-[documentação da status line](https://code.claude.com/docs/en/statusline)
-afirma que `rate_limits` *"won't show up when using API keys directly"*. O app
-detecta esse caso e diz isso, em vez de esperar por dados que nunca chegam.
+With token-based billing there are no usage windows, so the app says so instead
+of waiting for data that never arrives. Either window can also be absent on its
+own; when the 7-day limit isn't sent, the app labels it and hides the chart
+series rather than faking a value.
 
-Cada janela pode faltar por si só, mesmo com a outra presente, e a documentação
-oficial registra o comportamento mas não lista as condições. Quando o limite de
-7 dias não vem, o app mostra "não enviado para este plano" e o gráfico esconde
-a série, em vez de desenhar uma legenda para uma linha inexistente.
+Percentages are relative to your own plan's limit. Anthropic publishes only
+relative multiples (Max 5x = five times Pro), so 50% on Pro and 50% on Max 20x
+mean very different absolute usage but the same thing: half of what you have.
+Per-model and Sonnet-weekly limits aren't in the status line (only `/usage`
+shows them), so the app can't display them. The [user guide](docs/USER_GUIDE.md)
+has the details.
 
-Os planos Max têm ainda um limite semanal específico de Sonnet, e existe um
-limite por modelo do Opus. **Nenhum dos dois aparece na status line**: só o
-`/usage` os mostra. O monitor não pode exibir o que não recebe, e o tooltip do
-medidor de 7 dias diz isso.
+## Installation
 
-Os percentuais são sempre relativos ao limite do **seu** plano: a Anthropic
-publica apenas múltiplos relativos (Max 5x = "5 vezes o Pro"), nunca números
-absolutos. Por isso 50% num Pro e 50% num Max 20x significam consumos absolutos
-muito diferentes, mas a mesma coisa útil: metade do que você tem.
+### Prebuilt release (recommended)
 
-## Instalação
-
-### Código recebido por ZIP, WhatsApp ou AirDrop
-
-O macOS pode colocar todo o projeto em quarentena ao extrair um arquivo recebido.
-Prepare somente esta pasta antes do primeiro build:
-
-```zsh
-xattr -dr com.apple.quarantine "/caminho/para/claude-usage-monitor-mac"
-cd "/caminho/para/claude-usage-monitor-mac"
-./prepare-local.command
-```
-
-Não use `sudo`. O comando confirma que a pasta pertence ao usuário atual,
-remove a quarentena apenas do projeto e preserva as proteções do restante do
-sistema.
-
-### Instalar um release pronto
-
-Baixe o `ClaudeUsageMonitor-<versão>.zip` da página de
+Download `ClaudeUsageMonitor-<version>.zip` from
 [Releases](https://github.com/GuilhermeRozenblat/claude-usage-monitor-mac/releases),
-descompacte e mova o `Claude Usage Monitor.app` para `~/Applications`. Se o
-macOS bloquear a primeira execução, clique com o botão direito no app e
-escolha **Abrir**. (Quem compila do código gera o mesmo bundle em
-`dist/Claude Usage Monitor.app` via `./build-app.command`.)
+unzip, and move `Claude Usage Monitor.app` to `~/Applications`. The app is signed
+with a Developer ID and notarized. If macOS blocks the first launch, right-click
+the app and choose **Open**.
 
-### Compilar e instalar
+### Build from source
 
-Requer macOS 13 ou mais recente e Xcode 15 ou mais recente.
+Requires macOS 13+ and Xcode 15+.
 
 ```sh
-chmod +x *.command
+git clone https://github.com/GuilhermeRozenblat/claude-usage-monitor-mac.git
+cd claude-usage-monitor-mac
 ./install.command
 ```
 
-O instalador:
+The installer runs the tests, builds in release mode, signs the `.app`, installs
+it to `~/Applications`, configures the Claude Code status line, and launches the
+app. Don't use `sudo`. To rebuild only the bundle, run `./build-app.command`.
 
-1. executa os testes Swift;
-2. compila o executável em modo release;
-3. cria e assina localmente o bundle `.app`;
-4. instala em `~/Applications/Claude Usage Monitor.app`;
-5. configura a status line do Claude Code;
-6. abre o app na barra superior do macOS.
+## Usage
 
-Não use `sudo`.
+The app has no Dock icon. Find the status icon and percentage in the menu bar;
+the symbol shows the monitor's health:
 
-Para transferir somente o código-fonte, sem `.build`, binários ou metadados
-locais, execute `./source-archive.command`. Para colaboração contínua, prefira
-um repositório Git a enviar a pasta compilada.
+- checkmark: integration active, data valid;
+- clock: waiting for the first payload;
+- exclamation: window ended or notifications blocked;
+- octagon with an X: integration or cache error.
 
-## Uso
+Click it for the full panel: 5-hour and 7-day percentages with reset times,
+session context and tokens, model and reasoning effort, estimated API cost,
+last-update age, integration status, a mini-chart of the current 5-hour window
+with projected pace, and **Usage history…** (24-hour, 7-, 30-, and 90-day charts
+plus a per-model breakdown, all collected locally). The **•••** menu copies the
+usage summary, reconfigures the integration, opens the data folder, and quits.
 
-O app não aparece no Dock. Procure o ícone de estado e o percentual na barra
-superior do macOS. O símbolo informa a saúde do monitor:
+The panel is anchored to the menu bar like the macOS system extras (Wi-Fi,
+Sound, Control Center), with Liquid Glass on macOS 26.
 
-- círculo com check: integração ativa e dados válidos;
-- relógio: aguardando o primeiro payload;
-- exclamação: janela encerrada ou notificações bloqueadas;
-- octógono com X: integração ou cache com erro.
+**Settings** (⌘,) has two tabs: **General** (open at login, language, global
+shortcut, integration, data) and **Alerts** (alert types, thresholds, 1-hour
+snooze). To open the panel by keyboard, enable **Global shortcut** (⌥⌘U); it's
+off by default because a global shortcut takes that combination from every other
+app, and uses `RegisterEventHotKey`, which needs no Accessibility permission.
 
-Clique no item para ver:
+Allow notifications on first launch. The app alerts at 25/50/75/90/100% of the
+5-hour limit and 75/90/100% of the 7-day limit. If it was closed when a threshold
+passed, the highest pending one fires on open (data older than 30 minutes is
+skipped). When a window that passed 75% resets, the app says usage is freed.
 
-- percentual do limite de 5 horas;
-- data e hora do próximo reset de 5 horas;
-- percentual do limite de 7 dias;
-- data e hora do próximo reset de 7 dias;
-- uso, tokens e tamanho da janela de contexto da sessão;
-- modelo, projeto, esforço, thinking, duração e versão do Claude Code;
-- custo API estimado da sessão, quando enviado;
-- horário e idade da última atualização;
-- estado da integração com o Claude Code e da permissão de notificações;
-- mini-gráfico da janela de 5 h corrente, com o ritmo projetado ("no ritmo
-  atual: 100% às 14:32") ou o pico da janela;
-- **Histórico de uso…** com a janela de 5 h corrente e gráficos de 24 h, 7, 30
-  e 90 dias (coletado localmente pela própria ingestão), e a repartição do
-  consumo do período por modelo;
-- botões para atualizar a exibição, abrir o histórico e abrir o **Sobre**;
-- **Ajustes** (⌘,) com duas abas: **Geral** (início de sessão, idioma, atalho
-  global, integração, dados) e **Alertas** (tipos de alerta, marcos e pausa de
-  1 hora);
-- menu **•••** com copiar o resumo de uso, reconfigurar a integração, abrir a
-  pasta de dados e encerrar.
+## Status line in the terminal
 
-A aba **Geral** dos Ajustes abre com a identidade do app: ícone, versão e
-autoria.
-
-O painel é ancorado à barra no estilo dos extras do próprio macOS (Wi-Fi, Som,
-Central de Controlo), com Liquid Glass no macOS 26 e recuo para o vidro clássico
-nas versões anteriores.
-
-Para abrir o painel sem clicar no ícone, ative **Ajustes > Geral > Atalho
-global** (⌥⌘U). Vem desligado por padrão — um atalho global tira a combinação de
-todos os outros apps — e usa `RegisterEventHotKey`, a API nativa que não exige
-permissão de Acessibilidade. Se outro app já usar a combinação, a caixa avisa e
-não fica marcada.
-
-Na primeira execução, permita as notificações do macOS. O app avisa nos marcos
-de 25%, 50%, 75%, 90% e 100% do limite de 5 horas e de 75%, 90% e 100% do
-limite de 7 dias. Se o app estava fechado quando um marco foi cruzado, o maior
-marco pendente é notificado ao abrir (dados com mais de 30 minutos não geram
-alerta). Quando uma janela que passou de 75% reinicia, o app anuncia que o uso
-foi liberado.
-
-## Atualização dos dados
-
-O Claude Code envia `rate_limits` depois de respostas da API. Para atualizar:
-
-1. mantenha o app aberto;
-2. abra uma sessão autenticada do Claude Code;
-3. envie uma mensagem e aguarde a resposta.
-
-Uso feito em `claude.ai` ou no Claude Desktop aparece quando o Claude Code recebe
-a próxima resposta. O app reage na hora a novos dados (observa o arquivo de
-estado); o item **Atualizar exibição** relê o cache local sob demanda e não faz
-uma chamada de rede. Depois da releitura, envia uma notificação com os últimos
-valores de 5 horas e 7 dias e seus resets.
-
-Quando o horário de reset passa sem uma nova resposta, o app deixa de mostrar o
-percentual antigo como atual e exibe **aguardando nova janela**. Se os dados
-param de chegar por mais de 15 minutos com a janela ainda ativa, o cabeçalho
-avisa **sem dados recentes**.
-
-O campo pode estar ausente antes da primeira resposta, para autenticação por API
-key ou em contas sem uma assinatura Claude.ai compatível.
-
-## O que cada número significa
-
-- **5 horas e 7 dias:** limites do plano compartilhados entre superfícies Claude.
-- **Contexto:** quanto da memória da conversa atual está ocupado; não é limite do
-  plano e pode cair depois de `/compact` ou ao iniciar outra sessão.
-- **Custo API estimado:** cálculo local do Claude Code. A
-  [documentação oficial de custos](https://code.claude.com/docs/en/costs) informa
-  que esse valor não representa cobrança para assinantes Pro e Max.
-
-O comando interativo `/usage` do Claude Code pode mostrar divisões adicionais
-por skills, subagentes, plugins e MCPs. Esses dados não fazem parte do JSON da
-status line e, por isso, não são inventados nem extraídos pelo monitor.
-
-## Iniciar com o macOS
-
-Abra **Ajustes > Geral** e marque **Abrir ao iniciar sessão**. A opção usa
-`SMAppService`, a API nativa de itens de login do macOS.
-
-O macOS também permite revisar essa permissão em **Ajustes do Sistema > Geral >
-Itens de Início de Sessão**.
-
-## Comandos auxiliares
-
-Consultar o último estado no Terminal:
-
-```sh
-./check-now.command
-```
-
-Renovar o login do Claude Code:
-
-```sh
-./relogin.command
-```
-
-Recompilar somente o bundle:
-
-```sh
-./build-app.command
-```
-
-Remover o app e restaurar a status line anterior:
-
-```sh
-./uninstall.command
-```
-
-## Solução de problemas
-
-### O ícone não aparece na barra
-
-Abra manualmente:
-
-```sh
-open "$HOME/Applications/Claude Usage Monitor.app"
-```
-
-Se a barra estiver cheia, encerre ou reorganize outros itens da barra.
-
-### O app mostra `aguardando dados`
-
-1. confirme `claude --version` 2.1.80 ou mais recente;
-2. confirme `claude auth status`;
-3. em **Ajustes > Geral**, escolha **Reconfigurar Claude Code**;
-4. reinicie o Claude Code e aceite a confiança do workspace;
-5. envie uma mensagem e aguarde a resposta.
-
-Se o painel mostrar `bloqueada por disableAllHooks`, altere essa opção em
-`~/.claude/settings.json`; a documentação oficial informa que ela também desativa
-a status line.
-
-### O percentual parece desatualizado
-
-O app mostra o último valor recebido. Envie uma mensagem no Claude Code para
-obter novos `rate_limits`.
-
-### As notificações não aparecem
-
-Confira a linha **Notificações** no painel. Se a permissão estiver bloqueada,
-clique em **Atualizar exibição** para abrir o atalho aos Ajustes do Sistema.
-
-## Desenvolvimento
-
-Estrutura principal:
+Besides the panel, the app prints a compact line to the Claude Code status line
+at the bottom of the terminal:
 
 ```text
-Sources/ClaudeUsageMonitor/       Código AppKit e modos CLI
-Tests/ClaudeUsageMonitorTests/    Testes XCTest
-App/Info.plist                    Metadados do bundle
-build-app.command                 Build, assinatura e empacotamento
-dist/Claude Usage Monitor.app     App gerado
+Fable 5 (high)  ·  5h 5% ↻ 4h27m  ·  7d 71% ↻ 1d20h
 ```
 
-Executar apenas os testes:
+It shows the session's model and reasoning effort, each window's percentage
+color-coded by band (green, amber, red from 90%) and bold, and the time until
+reset (`↻`). Color respects `NO_COLOR` and `TERM=dumb`, so pipes and color-less
+terminals get plain text. The `↻` is standard Unicode, no Nerd Fonts needed. If
+you already had a status line, the app runs it and appends its own instead of
+replacing it.
+
+## Data refresh
+
+Claude Code sends `rate_limits` after API responses. To refresh, keep the app
+open, use an authenticated Claude Code session, and wait for a response. Usage
+from `claude.ai` or Claude Desktop appears on Claude Code's next response.
+
+The app reacts to new data instantly (it watches the state file) and makes no
+network calls; **Refresh display** re-reads the local cache on demand. When a
+reset time passes with no new response, it shows **waiting for new window**; if
+data stops for over 15 minutes while a window is active, the header warns
+**no recent data**.
+
+## What each number means
+
+- **5-hour and 7-day:** plan limits shared across Claude surfaces.
+- **Context:** how much of the current conversation is in use; not a plan limit,
+  and it drops after `/compact` or a new session.
+- **Estimated API cost:** a local Claude Code figure. The
+  [cost docs](https://code.claude.com/docs/en/costs) note it isn't a charge for
+  Pro and Max subscribers.
+
+`/usage` can show extra breakdowns (skills, subagents, plugins, MCPs) that aren't
+in the status line JSON, so the monitor doesn't show them.
+
+## Start with macOS
+
+Open **Settings > General** and check **Open at login** (uses `SMAppService`).
+You can also review it in **System Settings > General > Login Items**.
+
+## Helper commands
+
+```sh
+./check-now.command    # print the last state in the terminal
+./relogin.command      # renew the Claude Code login
+./build-app.command    # rebuild only the bundle
+./uninstall.command    # remove the app, restore the previous status line
+```
+
+## Troubleshooting
+
+**Icon missing from the menu bar.** Open it with
+`open "$HOME/Applications/Claude Usage Monitor.app"`. If the bar is full, remove
+other items.
+
+**Shows `waiting for data`.** Confirm `claude --version` is 2.1.80 or later and
+`claude auth status` works, then choose **Reconfigure Claude Code** in
+**Settings > General**, restart Claude Code, accept the workspace trust prompt,
+and send a message. If it shows `blocked by disableAllHooks`, change that key in
+`~/.claude/settings.json` (it also disables the status line).
+
+**Percentage looks stale.** The app shows the last value received; send a message
+to get new `rate_limits`.
+
+**Notifications don't appear.** Check the **Notifications** line in the panel; if
+blocked, click **Refresh display** to open System Settings.
+
+## Development
+
+```text
+Sources/ClaudeUsageMonitor/       AppKit code and CLI modes
+Tests/ClaudeUsageMonitorTests/    XCTest tests
+App/Info.plist                    Bundle metadata
+build-app.command                 Build, signing, packaging
+```
+
+Run the tests:
 
 ```sh
 CLANG_MODULE_CACHE_PATH="$PWD/.build/ModuleCache" \
@@ -286,35 +190,18 @@ SWIFTPM_MODULECACHE_OVERRIDE="$PWD/.build/ModuleCache" \
 swift test --disable-sandbox
 ```
 
-Documentação complementar:
+More docs: [User guide](docs/USER_GUIDE.md) · [Architecture](docs/ARCHITECTURE.md)
+· [Development](docs/DEVELOPMENT.md) · [Release](docs/RELEASE.md) ·
+[Security](SECURITY.md) · [Changelog](CHANGELOG.md).
 
-- [Guia do usuário](docs/USER_GUIDE.md)
-- [Arquitetura](docs/ARCHITECTURE.md)
-- [Desenvolvimento](docs/DEVELOPMENT.md)
-- [Release: assinatura, notarização e publicação](docs/RELEASE.md)
-- [Segurança](SECURITY.md)
-- [Histórico de mudanças](CHANGELOG.md)
-
-## Arquivos locais
-
-App instalado:
+## Local files
 
 ```text
-~/Applications/Claude Usage Monitor.app
+~/Applications/Claude Usage Monitor.app                 installed app
+~/Library/Application Support/ClaudeUsageMonitor         status line state and backup
+~/.claude/settings.json                                  integration config
 ```
 
-Estado e backup da status line:
-
-```text
-~/Library/Application Support/ClaudeUsageMonitor
-```
-
-Configuração integrada:
-
-```text
-~/.claude/settings.json
-```
-
-## Licença
+## License
 
 [MIT](LICENSE).

@@ -1,275 +1,267 @@
-# Guia do usuário
+# User Guide
 
-## Primeira execução
+## First launch
 
-Claude Usage Monitor é um app de barra de menus (`LSUIElement`). Ele não cria
-janela principal e não aparece no Dock.
+Claude Usage Monitor is a menu bar app (`LSUIElement`). It has no main window and
+doesn't appear in the Dock.
 
-Depois de instalar:
+After installing:
 
-1. abra `~/Applications/Claude Usage Monitor.app`;
-2. permita notificações quando o macOS solicitar;
-3. reinicie o Claude Code se ele já estava aberto;
-4. aceite a confiança do workspace;
-5. envie uma mensagem e aguarde a resposta.
+1. open `~/Applications/Claude Usage Monitor.app`;
+2. allow notifications when macOS asks;
+3. restart Claude Code if it was already running;
+4. accept the workspace trust prompt;
+5. send a message and wait for the response.
 
-Um ícone de saúde aparece na barra superior acompanhado do percentual da janela
-de 5 horas. Check indica funcionamento normal; relógio indica espera; exclamação
-indica atenção; X indica erro de integração ou cache.
+A health icon appears in the menu bar next to the 5-hour window percentage. A
+checkmark means everything works; a clock means it's waiting; an exclamation mark
+means attention is needed; an X means an integration or cache error.
 
-## Planos e o que aparece
+## Plans and what's shown
 
-O monitor mostra o que a status line do Claude Code envia, e ela só envia
-limites para assinaturas do Claude.ai.
+The monitor shows whatever the Claude Code status line sends, and the status line
+only reports limits for Claude.ai subscriptions.
 
-| Plano | 5 horas | 7 dias |
+| Plan | 5 hours | 7 days |
 | --- | --- | --- |
-| Pro, Max, Team, Enterprise por assento | sim | sim |
-| Chave de API, Console, Bedrock, Vertex, Foundry | não | não |
-| Enterprise por consumo | não | não |
-| Free | sem acesso ao Claude Code | nenhum |
+| Pro, Max, Team, Enterprise (per seat) | yes | yes |
+| API key, Console, Bedrock, Vertex, Foundry | no | no |
+| Enterprise (usage-based) | no | no |
+| Free | no Claude Code access | none |
 
-Com cobrança por token não existem janelas de uso: o consumo é faturado por
-token. Nesses casos o app diz isso em vez de esperar por dados que nunca chegam.
+Token-based billing has no usage windows: consumption is billed per token. In
+those cases the app says so instead of waiting for data that will never arrive.
 
-Os planos Max têm ainda um limite semanal específico de Sonnet, e existe um
-limite por modelo do Opus. Nenhum dos dois aparece na status line: só o
-comando `/usage` do Claude Code os mostra. Você pode atingir um desses limites
-sem que o monitor mostre 100%.
+Max plans also have a weekly Sonnet limit and a per-model Opus limit. Neither
+appears in the status line: only Claude Code's `/usage` command shows them. You
+can hit one of these limits without the monitor showing 100%.
 
-## Painel do app
+## App panel
 
-### Conta do Claude
+### Claude account
 
-O cabeçalho mostra o e-mail da conta conectada no Claude Code. A sessão é
-confirmada localmente por `claude auth status`; o e-mail só é usado quando esse
-comando informa que há login ativo. Depois de logout, metadados antigos do
-perfil são ignorados. Chaves de API aparecem sem associar o e-mail de uma conta
-OAuth, e nenhum token é lido ou salvo pelo monitor.
+The header shows the email of the account signed in to Claude Code. The session is
+confirmed locally via `claude auth status`; the email is only used when that
+command reports an active login. After you sign out, stale profile metadata is
+ignored. API keys appear without an OAuth account email, and the monitor never
+reads or stores any token.
 
-### `Limite de 5 horas`
+### `5-hour limit`
 
-Mostra a porcentagem consumida da janela atual de 5 horas. A linha de detalhe
-mostra a data, a hora local e o tempo restante até o reset. A barra usa o acento
-Claude em uso normal, laranja após 75% e vermelho após 90%. Depois que a janela
-termina, o percentual antigo é substituído por `Encerrado`.
+Shows the percentage consumed in the current 5-hour window. The detail line shows
+the date, local time, and time remaining until the reset. The gauge uses the
+Claude accent color under normal usage, turns orange after 75%, and red after 90%.
+Once the window ends, the old percentage is replaced by `Ended`.
 
-### `Limite de 7 dias`
+### `7-day limit`
 
-Mostra o limite semanal de todos os modelos e seu próximo reset. Nem todo plano
-recebe essa janela; nesse caso o painel mostra `não enviado para este plano` e o
-gráfico esconde a série.
+Shows the weekly all-models limit and its next reset. Not every plan gets this
+window; when it's missing, the panel shows `not sent for this plan` and the chart
+hides the series.
 
-Este é o limite semanal geral. O limite semanal de Sonnet dos planos Max e o
-limite por modelo do Opus não são informados pela status line e não aparecem
-aqui.
+This is the overall weekly limit. The weekly Sonnet limit on Max plans and the
+per-model Opus limit aren't reported by the status line and don't appear here.
 
-### `Contexto da sessão`
+### `Session context`
 
-Mostra o percentual ocupado pela conversa atual, tokens presentes no contexto,
-tamanho máximo e percentual livre. Contexto não é limite do plano: ele pode cair
-depois de `/compact` e recomeça em outra sessão.
+Shows the percentage taken up by the current conversation, tokens currently in
+context, maximum size, and percentage free. Context isn't a plan limit: it can
+drop after `/compact` and starts over in a new session.
 
-### `Detalhes da sessão`
+### `Session details`
 
-A grade mostra somente campos fornecidos oficialmente: modelo, nome curto do
-projeto, nome da sessão, esforço, thinking, duração, custo API estimado e versão
-do Claude Code. O custo é uma estimativa local e não representa cobrança de
-assinaturas Pro ou Max.
+The grid shows only officially provided fields: model, short project name, session
+name, reasoning effort, thinking, duration, estimated API cost, and Claude Code
+version. The cost is a local estimate and doesn't reflect billing for Pro or Max
+subscriptions.
 
-### `Atualizado`
+### `Updated`
 
-Horário em que o app recebeu o último `rate_limits`, acompanhado da idade do
-cache. Não é o horário em que o menu foi aberto.
+The time the app received the last `rate_limits`, plus the cache age. This is not
+the time the menu was opened.
 
-### `Integração`
+### `Integration`
 
-Mostra se `~/.claude/settings.json` aponta para o executável instalado. O estado
-`requer reparo` pode ser corrigido com **Reconfigurar Claude Code**. O estado
-`bloqueada por disableAllHooks` exige alterar essa opção nas configurações do
-Claude Code.
+Shows whether `~/.claude/settings.json` points to the installed executable. Fix
+the `needs repair` state with **Reconfigure Claude Code**. The `blocked by
+disableAllHooks` state requires changing that option in Claude Code's settings.
 
-### `Notificações`
+### `Notifications`
 
-Mostra se os alertas estão ativos, aguardando permissão ou bloqueados nos Ajustes
-do Sistema.
+Shows whether alerts are enabled, awaiting permission, or blocked in System
+Settings.
 
-### `Atualizar exibição`
+### `Refresh display`
 
-Relê imediatamente `state.json` e envia uma notificação com os últimos valores
-válidos de 5 horas, 7 dias e contexto. Janelas encerradas aparecem como
-`aguardando nova janela`. Essa ação não consulta a rede. Para obter um valor novo
-do serviço, envie uma mensagem no Claude Code. Em uso normal ela raramente é
-necessária: o app observa o arquivo de estado e atualiza sozinho quando a
-ingestão grava dados novos.
+Immediately re-reads `state.json` and sends a notification with the latest valid
+5-hour, 7-day, and context values. Ended windows appear as `waiting for new
+window`. This action doesn't query the network. To get a fresh value from the
+service, send a message in Claude Code. It's rarely needed: the app watches the
+state file and updates itself whenever ingestion writes new data.
 
-### `Copiar resumo de uso`
+### `Copy usage summary`
 
-No menu **•••**. Copia para a área de transferência o resumo compacto com 5
-horas, 7 dias e contexto, o mesmo texto do tooltip do ícone.
+In the **•••** menu. Copies the compact summary of 5-hour, 7-day, and context
+values to the clipboard, the same text as the icon tooltip.
 
-### `Histórico de uso…`
+### `Usage history…`
 
-Abre uma janela com o gráfico dos limites de 5 horas e 7 dias. Os períodos
-disponíveis são a **janela de 5 h** corrente e as faixas de 24 horas, 7, 30 ou
-90 dias. Passe o mouse sobre o gráfico para ler os valores de cada momento; a
-linha tracejada marca 90%.
+Opens a window with the chart of the 5-hour and 7-day limits. The ranges are the
+current **5-hour window** and spans of 24 hours, 7, 30, or 90 days. Hover over the
+chart to read the values at each point; the dashed line marks 90%.
 
-A **janela de 5 h** é o período corrente até o reset, não as últimas 5 horas
-corridas: o eixo vai do início da janela até o horário do reset, com "agora"
-marcado. Assim você lê quanto já gastou e quanto tempo falta. Um período rolante
-de "últimas 5 horas" atravessaria o reset e desenharia uma queda de 90% para 0%
-que parece consumo despencando, quando na verdade é só a janela reiniciando.
+The **5-hour window** is the current period up to the reset, not the last 5 elapsed
+hours: the axis runs from the start of the window to the reset time, with "now"
+marked. That way you can read how much you've spent and how much time is left. A
+rolling "last 5 hours" range would cross the reset and draw a drop from 90% to 0%
+that looks like usage plummeting, when the window is just restarting.
 
-O eixo vertical é sempre 0-100% do limite do **seu** plano e nunca se ajusta aos
-dados. A Anthropic publica apenas múltiplos relativos entre planos (Max 5x = "5
-vezes o Pro"), nunca números absolutos, então a percentagem é a única medida que
-significa o mesmo em qualquer plano. O espaço vazio acima da linha é a folga que
-resta.
+The vertical axis is always 0-100% of **your** plan's limit and never rescales to
+the data. Anthropic only publishes relative multiples between plans (Max 5x = "5
+times Pro"), never absolute numbers, so the percentage is the only measure that
+means the same thing on any plan. The empty space above the line is your remaining
+headroom.
 
-Em planos que não reportam o limite semanal, a série de 7 dias não aparece no
-gráfico nem na legenda. Os dados são coletados localmente pela
-própria ingestão (uma amostra por minuto, no máximo, com 90 dias de retenção)
-e podem ser apagados removendo `history.jsonl` na pasta de dados. Lacunas no
-gráfico correspondem a períodos sem uso do Claude Code. O app não inventa
-pontos onde não houve dados. O botão **Exportar…** salva o histórico completo
-em CSV (`timestamp,five_hour_pct,seven_day_pct,session_cost_usd`).
+On plans that don't report the weekly limit, the 7-day series appears in neither
+the chart nor the legend. The data is collected locally by ingestion (one sample
+per minute at most, with 90-day retention) and can be erased by removing
+`history.jsonl` in the data folder. Gaps in the chart mark periods with no Claude
+Code use; the app doesn't invent points where there was no data. The **Export…**
+button saves the full history as CSV
+(`timestamp,five_hour_pct,seven_day_pct,session_cost_usd`).
 
-### Ajustes > `Alertas`
+### Settings > `Alerts`
 
-Liga e desliga os alertas do limite de 5 horas, do limite de 7 dias e o aviso de
-janela reiniciada. Em **Notificar nos marcos** você escolhe o perfil: todos os
-marcos (padrão), a partir de 75% ou só críticos (90%+). A mudança vale para as
-próximas notificações, sem alertas retroativos. **Silenciar alertas por 1 hora**
-segura tudo temporariamente; o item mostra o horário em que o silêncio termina.
+Turns the 5-hour limit, 7-day limit, and window-restarted alerts on and off. Under
+**Notify at thresholds** you choose the profile: all thresholds (default), from 75%
+on, or critical only (90%+). The change applies to future notifications, with no
+retroactive alerts. **Mute alerts for 1 hour** holds everything temporarily; the
+item shows the time the mute ends.
 
-### Linha de tendência
+### Trend line
 
-Logo abaixo do medidor de 5 horas há um mini-gráfico da janela corrente. Ao
-lado, quando o uso está subindo de forma consistente, aparece a projeção
-**"No ritmo atual: 100% às HH:mm"**, calculada localmente sobre os últimos 45
-minutos de amostras. Sem ritmo relevante, mostra o pico da janela.
+Just below the 5-hour gauge there's a mini-chart of the current window. When usage
+is climbing steadily, the projection **"At the current pace: 100% at HH:mm"**
+appears next to it, computed locally over the last 45 minutes of samples. With no
+meaningful pace, it shows the window's peak.
 
-### Custo estimado por período
+### Estimated cost per period
 
-Nos detalhes da sessão, além do custo da sessão atual, o app mostra o custo de
-API estimado acumulado nas últimas 24 horas e nos últimos 7 dias, derivado do
-histórico local. É uma estimativa: não representa cobrança de planos Pro/Max.
+In the session details, besides the current session's cost, the app shows the
+estimated API cost over the last 24 hours and the last 7 days, derived from the
+local history. It's an estimate: it doesn't reflect billing for Pro/Max plans.
 
-### `Reconfigurar Claude Code`
+### `Reconfigure Claude Code`
 
-Regrava a chave `statusLine` em `~/.claude/settings.json` apontando para a
-localização atual do app. Use depois de mover ou reinstalar o bundle.
+Rewrites the `statusLine` key in `~/.claude/settings.json` to point to the app's
+current location. Use it after moving or reinstalling the bundle.
 
-### `Abrir ao iniciar sessão`
+### `Open at login`
 
-Registra ou remove o app como item de login usando a API `SMAppService` do
-macOS. O estado também pode ser revisado nos Ajustes do Sistema.
+Registers or removes the app as a login item using the macOS `SMAppService` API.
+The state can also be reviewed in System Settings.
 
-### `Abrir pasta de dados`
+### `Open data folder`
 
-Abre `~/Library/Application Support/ClaudeUsageMonitor`, que contém o estado e o
-backup da status line anterior.
+Opens `~/Library/Application Support/ClaudeUsageMonitor`, which holds the state and
+the backup of the previous status line.
 
-### `Idioma`
+### `Language`
 
-Por padrão, **Automático (Sistema)** acompanha a lista de idiomas preferidos do
-macOS. Inglês, português (Brasil) e espanhol são suportados; se nenhum deles
-estiver configurado, o app usa inglês. Também é possível selecionar **English**,
-**Português (Brasil)** ou **Español** manualmente. A mudança é imediata e fica
-salva para as próximas execuções.
+By default, **Automatic (System)** follows the macOS preferred-languages list.
+English, Portuguese (Brazil), and Spanish are supported; if none is configured, the
+app uses English. You can also pick **English**, **Português (Brasil)**, or
+**Español** manually. The change is immediate and is saved for future launches.
 
-### Para onde foi o consumo
+### Where the usage went
 
-Sob o gráfico do histórico, uma barra empilhada reparte o consumo do período
-pelos modelos que responderam, com o nome de cada um escrito dentro da sua
-fatia, e abaixo dela cada modelo tem a sua própria barra com o nome e a
-percentagem. A empilhada compara os modelos entre si; as
-individuais comparam cada modelo com o período inteiro. Só aparecem quando dois
-ou mais modelos consumiram no período escolhido.
+Below the history chart, a stacked bar splits the period's usage across the models
+that responded, with each model's name written inside its slice. Below it, each
+model has its own bar with its name and percentage. The stacked bar compares the
+models against each other; the individual bars compare each model against the whole
+period. They only appear when two or more models consumed usage in the chosen
+period.
 
-A status line do Claude Code não informa limites separados por modelo, apenas o
-total e qual modelo estava ativo. Então isto é uma atribuição, não uma leitura:
-o que a janela sobe entre duas medições conta para o modelo da medição mais
-recente. Serve para responder "gastei em Opus ou em Sonnet?", não para auditar
-cobrança.
+The Claude Code status line doesn't report per-model limits, only the total and
+which model was active. So this is an attribution, not a reading: whatever the
+window rises between two measurements counts toward the model in the more recent
+measurement. It answers "did I spend on Opus or on Sonnet?", not to audit billing.
 
-### Atalho ⌥⌘U
+### ⌥⌘U shortcut
 
-Em **Ajustes › Geral › Atalho**, desligado por padrão. Ligado, abre o painel com
-qualquer app à frente, sem pedir permissão de Acessibilidade. Se outro app já
-usa ⌥⌘U, o app avisa e a opção não liga: quem registrou primeiro fica com a
-combinação.
+In **Settings › General › Shortcut**, off by default. When on, it opens the panel
+over any app in front, without asking for Accessibility permission. If another app
+already uses ⌥⌘U, the app warns you and the option won't enable: whoever registered
+it first keeps the combination.
 
-### `Sobre`
+### `About`
 
-No botão ⓘ do painel. Segue a ordem do painel Sobre do macOS: ícone, nome,
-versão, uma linha sobre o app e a assinatura 🇧🇷 **Desenvolvido por Guilherme
-Rozenblat**. O ícone tem um anel de doze traços que acendem em sequência, e os
-blocos sobem ao abrir. As duas animações param quando **Reduzir movimento** está
-ativo nos Ajustes de Acessibilidade do macOS. Materiais translúcidos e cores se
-adaptam aos modos claro e escuro.
+In the panel's ⓘ button. It follows the macOS About panel layout: icon, name,
+version, a one-line description, and the 🇧🇷 **Developed by Guilherme Rozenblat**
+credit. The icon has a ring of twelve dashes that light up in sequence, and the
+blocks rise as it opens. Both animations stop when **Reduce motion** is enabled in
+the macOS Accessibility settings. Translucent materials and colors adapt to light
+and dark mode.
 
-### `Encerrar`
+### `Quit`
 
-Fecha somente a interface de menu. O Claude Code ainda pode atualizar o cache
-chamando o modo `--ingest-statusline`, e os marcos cruzados ficam registrados:
-ao reabrir o app, o maior marco pendente é notificado se os dados ainda forem
-recentes.
+Closes only the menu interface. Claude Code can still update the cache by calling
+the `--ingest-statusline` mode, and crossed thresholds are recorded: when you
+reopen the app, the highest pending threshold is notified if the data is still
+recent.
 
-## Notificações
+## Notifications
 
-Os alertas são enviados nos marcos de 25%, 50%, 75%, 90% e 100% da janela de 5
-horas e nos marcos de 75%, 90% e 100% da janela de 7 dias.
+Alerts are sent at the 25%, 50%, 75%, 90%, and 100% thresholds of the 5-hour window
+and at the 75%, 90%, and 100% thresholds of the 7-day window.
 
-- Cada marco é notificado uma vez por janela.
-- Quando o timestamp de reset muda, os marcos são liberados novamente.
-- Marcos cruzados enquanto o app estava fechado são registrados pela ingestão;
-  ao abrir, o app notifica apenas o maior marco pendente, e somente se os dados
-  tiverem menos de 30 minutos.
-- Quando uma janela que atingiu 75% ou mais reinicia, o app envia **uso
-  liberado** uma vez, até 30 minutos após o reset.
+- Each threshold is notified once per window.
+- When the reset timestamp changes, the thresholds are released again.
+- Thresholds crossed while the app was closed are recorded by ingestion; on open,
+  the app notifies only the highest pending threshold, and only if the data is less
+  than 30 minutes old.
+- When a window that reached 75% or more restarts, the app sends **usage freed**
+  once, up to 30 minutes after the reset.
 
-Na aba **Alertas** dos Ajustes (⌘,) é possível desligar os alertas de 5 horas,
-de 7 dias e o aviso de janela reiniciada, além de **Silenciar alertas por 1
-hora**. Ao fim do
-silêncio, alertas ainda recentes são entregues; os antigos são descartados.
+In the **Alerts** tab of Settings (⌘,) you can turn off the 5-hour, 7-day, and
+window-restarted alerts, plus **Mute alerts for 1 hour**. When the mute ends,
+alerts that are still recent are delivered; older ones are discarded.
 
-Permissões podem ser alteradas em **Ajustes do Sistema > Notificações > Claude
-Usage Monitor**.
+Permissions can be changed in **System Settings > Notifications > Claude Usage
+Monitor**.
 
-## Estados comuns
+## Common states
 
-### `aguardando dados`
+### `waiting for data`
 
-O app ainda não recebeu uma resposta do Claude Code com `rate_limits`.
+The app hasn't yet received a Claude Code response with `rate_limits`.
 
-### `7 dias: indisponível`
+### `7 days: unavailable`
 
-A resposta atual não contém a janela semanal. Isso pode depender da assinatura,
-da autenticação ou da disponibilidade do campo no Claude Code.
+The current response doesn't include the weekly window. This can depend on the
+subscription, the authentication, or the field's availability in Claude Code.
 
-### Percentual antigo
+### Stale percentage
 
-O valor é um cache. Uso feito em outras superfícies do Claude aparece na próxima
-resposta recebida pelo Claude Code.
+The value is cached. Usage from other Claude surfaces shows up in the next response
+received by Claude Code.
 
-### `cache inválido`
+### `invalid cache`
 
-O arquivo `state.json` existe, mas não contém um estado válido. Use
-**Reconfigurar Claude Code** e envie uma nova mensagem. Se persistir, encerre o
-app, remova somente `state.json` e abra o app novamente.
+The `state.json` file exists but doesn't contain a valid state. Use **Reconfigure
+Claude Code** and send a new message. If it persists, quit the app, remove only
+`state.json`, and open the app again.
 
-## Atualização
+## Updating
 
-Execute novamente `install.command`. O instalador encerra a instância atual,
-substitui o bundle, preserva o estado e reabre o app.
+Run `install.command` again. The installer quits the current instance, replaces the
+bundle, preserves the state, and reopens the app.
 
-## Remoção
+## Removal
 
-Execute `uninstall.command`. O processo:
+Run `uninstall.command`. The process:
 
-1. restaura a status line anterior;
-2. encerra o app;
-3. remove o bundle de `~/Applications`;
-4. apaga o diretório de dados do monitor.
+1. restores the previous status line;
+2. quits the app;
+3. removes the bundle from `~/Applications`;
+4. deletes the monitor's data directory.

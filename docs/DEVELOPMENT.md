@@ -1,23 +1,23 @@
-# Desenvolvimento e release
+# Development and release
 
-## Requisitos
+## Requirements
 
-- macOS 13 ou mais recente;
-- Xcode 15 ou mais recente;
+- macOS 13 or later;
+- Xcode 15 or later;
 - Swift Package Manager;
-- Apple Silicon ou Intel (o artefato de release é universal).
+- Apple Silicon or Intel (the release artifact is universal).
 
-## Preparar uma cópia transferida
+## Preparing a transferred copy
 
-Não transporte `.build` nem `dist`: esses diretórios contêm produtos específicos
-da máquina e são ignorados pelo Git. Para criar uma cópia limpa do fonte:
+Do not carry over `.build` or `dist`. They hold machine-specific build products
+and are ignored by Git. To make a clean copy of the source:
 
 ```zsh
 ./source-archive.command
 ```
 
-Se o ZIP chegar por navegador, WhatsApp ou AirDrop, o macOS pode propagar a
-quarentena para todos os arquivos extraídos. Na máquina de destino:
+If the ZIP arrives via a browser, WhatsApp, or AirDrop, macOS may set the
+quarantine flag on every extracted file. On the destination machine:
 
 ```zsh
 xattr -dr com.apple.quarantine "/caminho/para/claude-usage-monitor-mac"
@@ -25,11 +25,12 @@ cd "/caminho/para/claude-usage-monitor-mac"
 ./prepare-local.command
 ```
 
-O preparo recusa pastas que pertençam a outro usuário e não requer `sudo`.
+The prepare step refuses folders owned by another user and does not need
+`sudo`.
 
-Não existem pacotes de terceiros ou dependências de runtime.
+There are no third-party packages or runtime dependencies.
 
-## Estrutura
+## Structure
 
 ```text
 App/Info.plist
@@ -46,10 +47,10 @@ Package.swift
 build-app.command
 ```
 
-## Testes
+## Tests
 
-O ambiente de automação pode impedir o Swift de gravar caches globais. Use
-caches dentro do projeto:
+The automation environment may block Swift from writing global caches. Use
+project-local caches instead:
 
 ```sh
 CLANG_MODULE_CACHE_PATH="$PWD/.build/ModuleCache" \
@@ -57,27 +58,27 @@ SWIFTPM_MODULECACHE_OVERRIDE="$PWD/.build/ModuleCache" \
 swift test --disable-sandbox
 ```
 
-A cobertura atual valida:
+Current coverage validates:
 
-- parsing das janelas de 5 horas e 7 dias;
-- payload parcial e preservação de janelas ausentes;
-- contexto, modelo e metadados oficiais da sessão;
-- rejeição de percentuais e timestamps inválidos;
-- round trip e permissão `0600` do estado;
-- distinção entre estado ausente e cache inválido;
-- transição de marcos entre janelas;
-- ocultação de valores após o reset;
-- instalação, restauração e preservação da status line;
-- normalização do caminho absoluto do executável;
-- detecção de `disableAllHooks`;
-- migração do cache 3.1 e minimização de dados persistidos;
-- renderização em bitmap e dimensões fixas das views AppKit;
-- reconhecimento e migração do comando Node legado;
-- limite de 1 MiB da saída da status line anterior.
+- parsing of the 5-hour and 7-day windows;
+- partial payloads and preservation of missing windows;
+- session context, model, and official metadata;
+- rejection of invalid percentages and timestamps;
+- state round trip and `0600` permissions;
+- distinguishing missing state from an invalid cache;
+- milestone transitions across windows;
+- hiding values after a reset;
+- installing, restoring, and preserving the status line;
+- normalization of the executable's absolute path;
+- detection of `disableAllHooks`;
+- migration of the 3.1 cache and minimization of persisted data;
+- bitmap rendering and fixed dimensions of the AppKit views;
+- recognition and migration of the legacy Node command;
+- the 1 MiB limit on the previous status line output.
 
-## Modos CLI
+## CLI modes
 
-O executável do bundle pode ser testado sem abrir a interface:
+The bundle's executable can be tested without opening the interface:
 
 ```sh
 APP="dist/Claude Usage Monitor.app/Contents/MacOS/ClaudeUsageMonitor"
@@ -87,97 +88,98 @@ APP="dist/Claude Usage Monitor.app/Contents/MacOS/ClaudeUsageMonitor"
 "$APP" --uninstall-statusline
 ```
 
-Ingestão manual:
+Manual ingestion:
 
 ```sh
 printf '%s' '{"rate_limits":{"five_hour":{"used_percentage":44,"resets_at":1784140200},"seven_day":{"used_percentage":27,"resets_at":1784300400}}}' |
   "$APP" --ingest-statusline
 ```
 
-Para não alterar o perfil real:
+To avoid touching the real profile:
 
 ```sh
 export CLAUDE_USAGE_MONITOR_BASE_DIR="$(mktemp -d)"
 export CLAUDE_USAGE_MONITOR_SETTINGS_FILE="$CLAUDE_USAGE_MONITOR_BASE_DIR/settings.json"
 ```
 
-## Criar o bundle
+## Building the bundle
 
 ```sh
 ./build-app.command
 ```
 
-O script:
+The script:
 
-1. executa `swift test`;
-2. compila o produto release;
-3. cria `dist/Claude Usage Monitor.app`;
-4. copia o executável e `Info.plist`;
-5. aplica assinatura ad hoc;
-6. valida com `codesign` e `plutil`.
+1. runs `swift test`;
+2. compiles the release build;
+3. creates `dist/Claude Usage Monitor.app`;
+4. copies the executable and `Info.plist`;
+5. applies an ad hoc signature;
+6. validates with `codesign` and `plutil`.
 
-## Versão
+## Version
 
-Atualize estes campos em `App/Info.plist`:
+Update these fields in `App/Info.plist`:
 
 ```text
 CFBundleShortVersionString
 CFBundleVersion
 ```
 
-Registre a mudança em `CHANGELOG.md` antes de gerar o artefato.
+Record the change in `CHANGELOG.md` before producing the artifact.
 
-## Assinatura para distribuição
+## Signing for distribution
 
-O passo a passo completo de publicação (conta Apple Developer, certificado,
-notarização e GitHub Release) está em [RELEASE.md](RELEASE.md); esta seção é o
-resumo operacional.
+The full publishing walkthrough (Apple Developer account, certificate,
+notarization, and GitHub Release) lives in [RELEASE.md](RELEASE.md). This
+section is the operational summary.
 
-Sem variáveis de ambiente, o `build-app.command` assina ad hoc (uso local).
-Para distribuição pública, o próprio script cuida do fluxo completo:
+With no environment variables set, `build-app.command` signs ad hoc, for local
+use. For public distribution, the script handles the full flow:
 
 ```zsh
-# uma única vez, guarda as credenciais do notarytool no Keychain:
+# one time only, stores the notarytool credentials in the Keychain:
 xcrun notarytool store-credentials notary \
-  --apple-id "seu@email" --team-id "TEAMID" --password "app-specific"
+  --apple-id "your@email" --team-id "TEAMID" --password "app-specific"
 
-CODESIGN_IDENTITY="Developer ID Application: Nome (TEAMID)" \
+CODESIGN_IDENTITY="Developer ID Application: Name (TEAMID)" \
 NOTARY_PROFILE="notary" \
 ./build-app.command
 ```
 
-Isso assina com hardened runtime e timestamp, submete ao serviço notarial,
-grampeia o ticket e gera `dist/ClaudeUsageMonitor-<versão>.zip` pronto para
-publicar. O script também valida o ticket com `stapler`, a aceitação do
-Gatekeeper com `spctl` e as duas arquiteturas do binário universal.
+This signs with hardened runtime and a timestamp, submits to the notary
+service, staples the ticket, and produces a ready-to-publish
+`dist/ClaudeUsageMonitor-<version>.zip`. The script also validates the ticket
+with `stapler`, Gatekeeper acceptance with `spctl`, and both architectures of
+the universal binary.
 
-O bundle usa a identidade estável
-`com.guilhermerozenblat.ClaudeUsageMonitor`. Não a altere depois da primeira
-publicação: preferências, notificações e o item de login são associados a ela.
+The bundle uses the stable identity
+`com.guilhermerozenblat.ClaudeUsageMonitor`. Do not change it after the first
+release: preferences, notifications, and the login item are all tied to it.
 
-Este app deve ser distribuído diretamente com Developer ID, não pela Mac App
-Store: ele precisa atualizar `~/.claude/settings.json` e executar a status line
-anterior, operações incompatíveis com o App Sandbox obrigatório da loja.
+Distribute this app directly with a Developer ID, not through the Mac App
+Store. It updates `~/.claude/settings.json` and runs the previous status line,
+which the store's mandatory App Sandbox does not allow.
 
-## Build universal
+## Universal build
 
-O `build-app.command` compila universal (arm64 + x86_64) por padrão e imprime
-as arquiteturas do executável. Use `UNIVERSAL=0` para compilar apenas a
-arquitetura local durante o desenvolvimento.
+`build-app.command` builds universal (arm64 + x86_64) by default and prints the
+executable's architectures. Use `UNIVERSAL=0` to build only the local
+architecture during development.
 
-## Checklist de release
+## Release checklist
 
 ```text
-[ ] testes Swift passam
-[ ] Info.plist possui a versão correta
-[ ] CFBundleIdentifier continua estável
-[ ] bundle release foi recriado
-[ ] lipo mostra arm64 e x86_64
-[ ] codesign --verify --deep --strict passa
-[ ] release público usa Developer ID, hardened runtime, timestamp e notarização
-[ ] stapler validate e spctl passam no artefato público
-[ ] modos --ingest-statusline e --show passam em diretório temporário
-[ ] app instalado aparece na barra de menus
-[ ] settings.json aponta para o executável instalado
-[ ] README e CHANGELOG foram atualizados
+[ ] Swift tests pass
+[ ] Info.plist has the correct version
+[ ] CFBundleIdentifier remains stable
+[ ] release bundle was rebuilt
+[ ] lipo shows arm64 and x86_64
+[ ] codesign --verify --deep --strict passes
+[ ] public release uses Developer ID, hardened runtime, timestamp, and notarization
+[ ] stapler validate and spctl pass on the public artifact
+[ ] --ingest-statusline and --show modes pass in a temporary directory
+[ ] installed app appears in the menu bar
+[ ] settings.json points to the installed executable
+[ ] README and CHANGELOG were updated
 ```

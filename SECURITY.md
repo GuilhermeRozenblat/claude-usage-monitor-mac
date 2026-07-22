@@ -1,77 +1,78 @@
-# Segurança
+# Security
 
-## Dados processados
+## Data processed
 
-O executável recebe o JSON completo da status line em `stdin`, mas decodifica
-somente limites, contexto, modelo, identificador e nome de sessão, nome curto do
-projeto, versão, esforço, thinking, duração e custo API estimado. O
-`session_id` fica apenas nas amostras do histórico, onde é o que permite somar
-custo sem misturar sessões concorrentes; não vai para o `state.json`. Texto do
-payload perde caracteres de controlo e é truncado em 120 caracteres antes de ser
-exibido ou gravado.
+The executable receives the full status line JSON on `stdin`, but decodes only
+the limits, context, model, session identifier and name, short project name,
+version, effort, thinking, duration, and estimated API cost. The `session_id`
+is kept only in the history samples, where it is what allows costs to be summed
+without mixing concurrent sessions; it is never written to `state.json`. Text
+from the payload is stripped of control characters and truncated to 120
+characters before being displayed or stored.
 
-O app ignora `transcript_path`, não persiste o caminho completo do projeto e não
-lê conversas. Para identificar a conta, executa `claude auth status` e lê somente
-`oauthAccount.emailAddress` de `~/.claude.json` quando a CLI confirma um login
-ativo. Não acessa tokens de autenticação, cookies, Keychain ou perfis de
-navegador e não implementa cliente de rede.
+The app ignores `transcript_path`, does not persist the full project path, and
+does not read conversations. To identify the account, it runs `claude auth
+status` and reads only `oauthAccount.emailAddress` from `~/.claude.json` when
+the CLI confirms an active login. It does not access authentication tokens,
+cookies, the Keychain, or browser profiles, and it implements no network
+client.
 
-## Escritas no sistema
+## System writes
 
 - `~/Library/Application Support/ClaudeUsageMonitor/state.json`;
 - `~/Library/Application Support/ClaudeUsageMonitor/history.jsonl`;
-- arquivos cooperativos `state.lock` e `history.lock` no mesmo diretório;
+- the cooperative `state.lock` and `history.lock` files in the same directory;
 - `~/Library/Application Support/ClaudeUsageMonitor/previous-statusline.json`;
-- a chave `statusLine` de `~/.claude/settings.json`;
-- registro de item de login, apenas quando habilitado pelo menu.
+- the `statusLine` key in `~/.claude/settings.json`;
+- a login item entry, only when enabled from the menu.
 
-Estado, histórico, locks, backup e settings usam permissão `0600`; arquivos
-estruturados substituídos por inteiro usam gravação atômica. O diretório base
-usa `0700`.
+State, history, locks, backup, and settings use `0600` permissions;
+structured files that are replaced in full use atomic writes. The base
+directory uses `0700`.
 
-## Execução de comandos
+## Command execution
 
-Uma status line preexistente continua sendo executada porque já fazia parte da
-configuração confiada pelo usuário. O subprocesso usa `/bin/zsh`, timeout de 1,5
-segundo, stderr descartado e coleta incremental limitada a 1 MiB. Se o comando
-não encerrar após `terminate`, o processo recebe `SIGKILL`.
+A pre-existing status line continues to run because it was already part of the
+configuration the user trusted. The subprocess uses `/bin/zsh`, a 1.5-second
+timeout, discarded stderr, and incremental collection capped at 1 MiB. If the
+command does not exit after `terminate`, the process is sent `SIGKILL`.
 
-A escrita do payload no `stdin` do filho é feita fora da thread que cronometra,
-para que o timeout valha mesmo quando o comando nunca lê o stdin, e o descritor
-pede `F_SETNOSIGPIPE`: um leitor que fecha vira erro tratado, não um sinal que
-derruba o processo.
+Writing the payload to the child's `stdin` is done off the thread that times
+the operation, so that the timeout holds even when the command never reads
+stdin, and the descriptor requests `F_SETNOSIGPIPE`: a reader that closes
+becomes a handled error rather than a signal that kills the process.
 
-O app não executa lifecycle scripts de pacotes e não possui dependências de
-runtime de terceiros.
+The app does not run package lifecycle scripts and has no third-party runtime
+dependencies.
 
-Para mostrar a conta conectada, o app também executa diretamente o binário local
-do Claude Code com `auth status --json`, em fila de background e com timeout de
-2 segundos. O stdout é usado apenas para o estado de autenticação; stderr é
-descartado.
+To show the connected account, the app also runs the local Claude Code binary
+directly with `auth status --json`, on a background queue and with a 2-second
+timeout. Its stdout is used only for the authentication state; stderr is
+discarded.
 
-## Atalho global
+## Global shortcut
 
-O atalho ⌥⌘U é opcional e vem desligado. Ligado, usa `RegisterEventHotKey` do
-Carbon, a API do sistema para atalhos globais: o macOS entrega ao app apenas
-essa combinação e nenhuma outra tecla. O app não pede nem usa permissão de
-Acessibilidade, que seria necessária para observar o teclado inteiro (é o que
-`NSEvent.addGlobalMonitorForEvents` exigiria), e portanto não tem como ver o que
-se digita em outros apps. A preferência fica em UserDefaults; nada é gravado
-fora do app.
+The ⌥⌘U shortcut is optional and ships disabled. When enabled, it uses Carbon's
+`RegisterEventHotKey`, the system API for global shortcuts: macOS delivers only
+that combination to the app and no other keystroke. The app neither requests
+nor uses the Accessibility permission that would be required to observe the
+entire keyboard (which is what `NSEvent.addGlobalMonitorForEvents` would
+demand), and therefore has no way to see what is typed in other apps. The
+preference lives in UserDefaults; nothing is written outside the app.
 
-## Assinatura
+## Signing
 
-O bundle local recebe assinatura ad hoc (`codesign --sign -`). Ela garante a
-integridade estrutural usada pelo macOS, mas não identifica um desenvolvedor e
-não equivale a notarização da Apple.
+The local bundle receives an ad hoc signature (`codesign --sign -`). It
+guarantees the structural integrity macOS relies on, but does not identify a
+developer and is not equivalent to Apple notarization.
 
-Para distribuição pública, substitua a assinatura ad hoc por Developer ID
-Application, habilite hardened runtime e timestamp e envie o app para
-notarização. O `build-app.command` automatiza esse fluxo quando recebe
-`CODESIGN_IDENTITY` e `NOTARY_PROFILE`. Builds locais ad hoc podem exigir
-**botão direito > Abrir** na primeira execução e não devem ser publicados.
+For public distribution, replace the ad hoc signature with a Developer ID
+Application signature, enable the hardened runtime and a timestamp, and submit
+the app for notarization. `build-app.command` automates this flow when given
+`CODESIGN_IDENTITY` and `NOTARY_PROFILE`. Local ad hoc builds may require
+**right-click > Open** on first launch and should not be published.
 
-Valide o artefato antes da instalação:
+Validate the artifact before installing:
 
 ```sh
 codesign --verify --deep --strict "dist/Claude Usage Monitor.app"
@@ -80,14 +81,15 @@ plutil -lint "dist/Claude Usage Monitor.app/Contents/Info.plist"
 
 ## Sandbox
 
-O app não usa App Sandbox porque precisa atualizar `~/.claude/settings.json`,
-manter arquivos em Application Support e executar uma status line anterior. Não
-execute o instalador com `sudo`.
+The app does not use the App Sandbox because it needs to update
+`~/.claude/settings.json`, keep files in Application Support, and run a previous
+status line. Do not run the installer with `sudo`.
 
-## Remoção
+## Removal
 
-`uninstall.command` restaura a status line anterior, encerra o processo, remove o
-bundle de `~/Applications` e apaga somente o diretório de dados do monitor.
+`uninstall.command` restores the previous status line, terminates the process,
+removes the bundle from `~/Applications`, and deletes only the monitor's data
+directory.
 
-Para o checklist operacional de release, consulte
+For the operational release checklist, see
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).

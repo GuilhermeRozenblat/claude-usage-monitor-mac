@@ -1,116 +1,116 @@
-# Arquitetura
+# Architecture
 
-## Visão geral
+## Overview
 
-Claude Usage Monitor 3.6 é um app nativo AppKit para macOS. O mesmo executável
-atua como app de barra de menus e como receptor da status line do Claude Code.
+Claude Usage Monitor 3.6 is a native AppKit app for macOS. One executable serves
+as both the menu bar app and the receiver for the Claude Code status line.
 
-A interface suporta inglês, português (pt-BR) e espanhol. No modo automático,
-`Locale.preferredLanguages` escolhe o primeiro idioma suportado e inglês é o
-fallback. A escolha manual fica em `UserDefaults` e também vale para os modos
-CLI. As strings vivem em `L10n.swift` (sem arquivos `.lproj`, para funcionar
-também em `--ingest-statusline` sem depender de recursos do bundle).
+The interface supports English, Portuguese (pt-BR), and Spanish. In automatic
+mode, `Locale.preferredLanguages` picks the first supported language, falling
+back to English. A manual choice is stored in `UserDefaults` and also applies to
+the CLI modes. Strings live in `L10n.swift` (no `.lproj` files, so
+`--ingest-statusline` works without bundle resources).
 
 ```text
-Resposta do Claude Code
+Claude Code response
         |
         v
-JSON de uso e sessão em stdin
+Usage and session JSON on stdin
         |
         v
 ClaudeUsageMonitor --ingest-statusline
         |
-        +-> state.json (0600) com marcos cruzados por janela
-        +-> history.jsonl (0600) com amostras locais
-        +-> texto da status line
+        +-> state.json (0600) with per-window threshold crossings
+        +-> history.jsonl (0600) with local samples
+        +-> status line text
         |
         v
-App de menu observa o diretório de dados (DispatchSource) e relê ao gravar;
-um timer de 30 segundos cobre transições de relógio (countdown, expiração,
-dados obsoletos)
+Menu app watches the data directory (DispatchSource) and re-reads on write;
+a 30-second timer covers clock transitions (countdown, expiration,
+stale data)
         |
-        +-> percentual na barra superior
-        +-> painel com 5h, 7d, contexto e sessão
-        +-> entrega de notificações de marcos, 7 dias e janela reiniciada
+        +-> percentage in the menu bar
+        +-> panel with 5-hour window, 7-day window, context, and session
+        +-> delivery of threshold, 7-day, and window-reset notifications
 ```
 
-Não existe serviço HTTP, navegador automatizado, LaunchAgent ou processo Node.
+There is no HTTP service, headless browser, LaunchAgent, or Node process.
 
-## Modos do executável
+## Executable modes
 
-Sem argumentos, o binário inicia `NSApplication` com política `.accessory`. A
-chave `LSUIElement` no `Info.plist` remove o ícone do Dock.
+With no arguments, the binary starts `NSApplication` with the `.accessory`
+policy. The `LSUIElement` key in `Info.plist` removes the Dock icon.
 
-Modos auxiliares:
+Auxiliary modes:
 
 ```text
---ingest-statusline     recebe JSON do Claude Code e atualiza o estado
---install-statusline    configura ~/.claude/settings.json
---uninstall-statusline  restaura a configuração anterior
---show                  imprime o último estado no Terminal
+--ingest-statusline     receives JSON from Claude Code and updates state
+--install-statusline    configures ~/.claude/settings.json
+--uninstall-statusline  restores the previous configuration
+--show                  prints the last state to the Terminal
 ```
 
-## Componentes Swift
+## Swift components
 
 ### `MenuBarApp.swift`
 
-Cria `NSStatusItem` com ícone SF Symbol dinâmico e percentual. Os estados são
-saudável, aguardando, atenção e erro. O clique alterna o painel; o app não usa
-NSMenu.
+Creates an `NSStatusItem` with a dynamic SF Symbol icon and percentage. The
+states are healthy, waiting, warning, and error. Clicking toggles the panel; the
+app does not use NSMenu.
 
-Detecta cobrança por chave de API (`ClaudeAccount.authMethod`) e, nesse caso,
-explica que não existem janelas de uso em vez de aguardar `rate_limits` que a
-status line nunca envia para esse tipo de autenticação.
+It detects API-key billing (`ClaudeAccount.authMethod`) and then explains that
+there are no usage windows, rather than waiting for `rate_limits` that the status
+line never sends for that authentication type.
 
-### `MonitorPanel.swift` e `MonitorPanelController.swift`
+### `MonitorPanel.swift` and `MonitorPanelController.swift`
 
-Um `NSPanel` sem moldura ancorado ao item da barra, na forma que a Apple usa
-nos próprios extras (Wi-Fi, Som, Central de Controlo). Um NSMenu dimensiona-se
-pelo item mais largo e desenha a própria moldura, então não aceita vidro nem
-acompanha views de largura fixa; o painel dispensou toda a aritmética de
-truncagem que existia só para o conter.
+A borderless `NSPanel` anchored to the menu bar item, in the shape Apple uses for
+its own menu extras (Wi-Fi, Sound, Control Center). An NSMenu sizes itself to its
+widest item and draws its own frame, so it accepts neither glass nor fixed-width
+views; the panel dropped all the truncation arithmetic that existed only to fit
+inside one.
 
-A sombra é desenhada por nós (`Glass.panelSurface`) com `hasShadow = false`: o
-macOS deriva a sombra da janela do alpha do backing, o NSGlassEffectView é
-composto na GPU e não escreve lá os cantos, e o resultado era uma sombra
-quadrada à volta de um painel arredondado. A janela leva `Metrics.shadowMargin`
-de folga transparente de cada lado, e a ancoragem desconta essa margem.
+We draw the shadow ourselves (`Glass.panelSurface`) with `hasShadow = false`:
+macOS derives the window shadow from the backing store's alpha, but
+NSGlassEffectView composites on the GPU and does not write its rounded corners
+there, so the result was a square shadow around a rounded panel. The window
+carries `Metrics.shadowMargin` of transparent slack on each side, and the
+anchoring accounts for that margin.
 
 ### `Design.swift`
 
-Paleta, métricas e a superfície de vidro. `Glass.wrap` usa `NSGlassEffectView`
-(Liquid Glass) no macOS 26 e recua para `NSVisualEffectView` nas versões
-anteriores, mantendo o piso em macOS 13. Os hexadecimais da marca vivem aqui
-uma vez só; antes estavam duplicados em `MenuViews` e `HistoryWindow`.
+The palette, metrics, and glass surface. `Glass.wrap` uses `NSGlassEffectView`
+(Liquid Glass) on macOS 26 and falls back to `NSVisualEffectView` on earlier
+versions, keeping the floor at macOS 13. The brand hex values live here once;
+they were previously duplicated across `MenuViews` and `HistoryWindow`.
 
 ### `SettingsWindow.swift`
 
-Janela de Ajustes (⌘,) com abas **Geral** e **Alertas**, no vocabulário de
-formulário do sistema (`NSGridView`). Sem vidro por dentro, de propósito: os
-Ajustes do Sistema do macOS 26 usam a moldura padrão. A aba Geral abre com a
-identidade do app (ícone, versão, autoria).
+The Settings window (⌘,) with **General** and **Alerts** tabs, in the system's
+form vocabulary (`NSGridView`). No glass inside: macOS 26 System Settings uses the
+standard frame. The General tab opens with the app's identity (icon, version,
+authorship).
 
-`MenuViews.swift` desenha as barras com acentos Claude dinâmicos: um tom mais
-escuro sobre superfícies claras e um mais luminoso no modo escuro, preservando
-contraste, tipografia e cores semânticas do macOS. Em 75% usa alerta laranja;
-em 90%, vermelho.
+`MenuViews.swift` draws the gauges with dynamic Claude accents: a darker tone over
+light surfaces and a brighter one in dark mode, preserving contrast, typography,
+and the semantic colors of macOS. At 75% it uses an orange warning; at 90%, red.
 
-Janelas cujo reset já passou deixam de exibir o percentual em cache. Dados sem
-atualização há mais de 15 minutos com janela ativa entram no estado de atenção
-`sem dados recentes`. O refresh manual relê o cache e envia uma notificação com
-os valores disponíveis. O item **Copiar resumo de uso** coloca o mesmo resumo na
-área de transferência e o tooltip do ícone traz o resumo completo.
+Windows whose reset has already passed stop showing the cached percentage. Data
+that has not updated for more than 15 minutes with an active window enters the
+`no recent data` warning state. A manual refresh re-reads the cache and sends a
+notification with the available values. The **Copy usage summary** item places the
+same summary on the clipboard, and the icon's tooltip carries the full summary.
 
-A releitura é dirigida por eventos: um `DispatchSourceFileSystemObject` observa
-o diretório de dados e o check de integração só reparseia
-`~/.claude/settings.json` quando o mtime muda.
+Re-reading is event-driven: a `DispatchSourceFileSystemObject` watches the data
+directory, and the integration check only re-parses `~/.claude/settings.json`
+when the mtime changes.
 
-O item de login usa `SMAppService.mainApp`. Notificações usam
+The login item uses `SMAppService.mainApp`. Notifications use
 `UNUserNotificationCenter`.
 
 ### `UsageModels.swift`
 
-Decodifica exclusivamente os campos necessários:
+Decodes only the fields it needs:
 
 ```text
 rate_limits.five_hour.used_percentage
@@ -128,180 +128,181 @@ cost.total_cost_usd
 cost.total_duration_ms
 ```
 
-Percentuais fora de 0 a 100 são rejeitados. Cada janela de limite é opcional e
-independente. O caminho do projeto é reduzido ao último componente antes de ser
-persistido. `transcript_path` não é decodificado.
+Percentages outside 0 to 100 are rejected. Each limit window is optional and
+independent. The project path is reduced to its last component before being
+persisted. `transcript_path` is not decoded.
 
 ### `StatusLineProcessor.swift`
 
-Atualiza limites e metadados da sessão sem apagar campos opcionais ausentes e
-encadeia uma status line preexistente, quando houver. O comando anterior recebe o
-mesmo JSON, tem timeout de 1,5 segundo e saída drenada com limite de memória de
-1 MiB.
+Updates the limits and session metadata without clearing absent optional fields,
+and chains a pre-existing status line when one is present. The previous command
+receives the same JSON, has a 1.5-second timeout, and its output is drained with a
+1 MiB memory cap.
 
-Um payload não vazio que falha no parse grava `lastIngestErrorAt` em
-`state.json` sem apagar o restante do estado; o menu sinaliza `última leitura
-falhou` enquanto não chega um payload válido mais recente.
+A non-empty payload that fails to parse writes `lastIngestErrorAt` to `state.json`
+without clearing the rest of the state; the menu flags `last read failed` until a
+more recent valid payload arrives.
 
-Quando o payload traz `rate_limits`, o ingest também acrescenta uma amostra em
-`history.jsonl` (`HistoryStore`): JSONL com `{t, h5, d7, c, m, s}` (`m` é o
-modelo ativo na amostra e `s` a sessão que a emitiu; sem `s` não dá para somar
-custo, porque o custo é acumulado por sessão e o arquivo é comum a todas),
-throttle de 60s
-pelo timestamp da última amostra válida, escrita com `O_APPEND` e retenção de
-90 dias. O prune roda no app, não no ingest.
+When the payload carries `rate_limits`, the ingest also appends a sample to
+`history.jsonl` (`HistoryStore`): JSONL with `{t, h5, d7, c, m, s}` (`m` is the
+model active in the sample and `s` the session that emitted it; without `s` you
+cannot total cost, because cost is accumulated per session and the file is shared
+across all of them), throttled to 60s by the timestamp of the last valid sample,
+written with `O_APPEND`, and retained for 90 days. The prune runs in the app, not
+in the ingest.
 
-`HistoryStore.load` lê da cauda para trás, alargando a janela só se ela ainda
-não alcançou o período pedido. As amostras são acrescentadas em ordem de tempo,
-então o que interessa está sempre no fim: na retenção cheia, decodificar o
-arquivo inteiro custava 267 ms na thread principal a cada ingestão para ficar
-com as 300 linhas das últimas 5 h. A poda roda no arranque e uma vez por dia,
-porque um app de barra de menus fica meses ligado.
+`HistoryStore.load` reads from the tail backward, widening the window only if it
+has not yet reached the requested period. Samples are appended in time order, so
+what matters is always at the end: at full retention, decoding the entire file
+cost 267 ms on the main thread for every ingest just to reach the 300 lines of the
+last 5 hours. Pruning runs at launch and once per day, since a menu bar app stays
+running for months.
 
-`FileLock.swift` fornece locks cooperativos entre processos. O ciclo completo
-de leitura/modificação/gravação de `state.json` é serializado para que sessões
-simultâneas não sobrescrevam campos umas das outras. Append, leitura e poda do
-histórico usam outro lock estável, evitando linhas parciais e perda de amostras
-durante a substituição atômica feita pela poda.
+`FileLock.swift` provides cooperative cross-process locks. The full
+read/modify/write cycle of `state.json` is serialized so concurrent sessions do
+not overwrite each other's fields. History append, read, and prune use another
+stable lock, avoiding partial lines and lost samples during the atomic replacement
+the prune performs.
 
 ### `UsageTrends.swift`
 
-`PaceEstimator` faz regressão linear sobre as amostras dos últimos 45 minutos
-(descartando o trecho anterior a uma queda de janela) e projeta quando a
-janela de 5h atinge 100%; a projeção só aparece com ritmo ≥ 2 pontos/h, dado
-fresco e reset posterior à projeção. `CostAggregator` estima o custo de um
-período somando os aumentos do custo cumulativo por sessão (quedas indicam
-sessão nova), **por sessão**: as amostras de sessões concorrentes intercalam-se
-no mesmo arquivo, e somar a série como se fosse uma só lia cada alternância como
-sessão nova e voltava a somar o custo inteiro da outra. `ModelUsage.split` usa a
-mesma regra de incrementos para repartir
-a subida da janela pelos modelos: entre duas amostras, o que subiu conta para o
-modelo da mais recente. É atribuição, não leitura, porque a status line não
-manda `limits[]` por modelo.
+`PaceEstimator` runs linear regression over the samples from the last 45 minutes
+(discarding the segment before a window drop) and projects when the 5-hour window
+reaches 100%; the projection only appears with a pace ≥ 2 points/h, fresh data,
+and a reset later than the projection. `CostAggregator` estimates a period's cost
+by summing the increases in cumulative cost **per session** (drops indicate a new
+session): samples from concurrent sessions interleave in the same file, and summing
+the series as one would read every switch as a new session and re-add the other
+session's entire cost. `ModelUsage.split` uses the same increment rule to divide
+the window's rise among the models: between two samples, the amount that rose
+counts toward the model of the more recent one. It is attribution, not a reading,
+because the status line does not send `limits[]` per model.
 
-A `TrendView` do painel mostra a sparkline da janela de 5h corrente e a projeção; o app relê o `history.jsonl` apenas quando o mtime muda.
+The panel's `TrendView` shows the sparkline of the current 5-hour window and the
+projection; the app re-reads `history.jsonl` only when the mtime changes.
 
 ### `HistoryWindow.swift`
 
-Janela **Histórico de uso…** com a janela de 5h corrente e faixas de
-24h/7d/30d/90d. Gráfico de linhas desenhado em AppKit: séries de 5h e 7d
-(laranja Claude e azul, validados para daltonismo nos dois modos), grid
-recessivo em 0-100%, referência tracejada em 90%, quebra de linha em lacunas
-sem amostras (não interpola períodos sem uso), downsample para ≤500 pontos
-preservando picos, crosshair com leitura de valores sob o cursor e pico do
-período no rodapé.
+The **Usage history…** window with the current 5-hour window and 24h/7d/30d/90d
+ranges. A line chart drawn in AppKit: 5-hour and 7-day series (Claude orange and
+blue, validated for color blindness in both modes), a recessive grid at 0-100%, a
+dashed reference at 90%, line breaks at gaps with no samples (it does not
+interpolate periods with no usage), downsampling to ≤500 points while preserving
+peaks, a crosshair reading the values under the cursor, and the period's peak in
+the footer.
 
-`ModelSplitView` fica entre o gráfico e o rodapé: barra repartida com legenda,
-alimentada por `ModelUsage.split` sobre as amostras **cruas** (o downsample fica
-com o pico de cada balde e descarta os degraus de onde a atribuição sai). Some
-sozinha com menos de dois modelos, e agrega a cauda em "Outros" a partir do
-quinto. Abaixo da barra empilhada, uma `ModelShareRowView` por modelo (nome,
-barra própria, percentagem), com colunas fixas para alinharem entre linhas.
+`ModelSplitView` sits between the chart and the footer: a split bar with a legend,
+fed by `ModelUsage.split` over the **raw** samples (the downsample keeps each
+bucket's peak and discards the steps the attribution comes from). It disappears on
+its own with fewer than two models, and aggregates the tail into "Others" from the
+fifth onward. Below the stacked bar, one `ModelShareRowView` per model (name, its
+own bar, percentage), with fixed columns so they align across rows.
 
-As fatias usam `Palette.modelShare`: tons opacos separados sobretudo por
-**luminosidade** (sob deuteranopia o eixo vermelho-verde desaparece; a
-luminosidade e o amarelo-azul ficam), com deriva de matiz por cima para somar
-separação a quem vê as cores todas. Cada tom mede ≥3:1 contra o fundo da janela
-e ≥4.5:1 contra a sua tinta (`Palette.ink`, que escolhe preto ou branco pela
-luminância medida), verificado em `ModelShareContrastTests`. São três degraus mais um neutro: o quarto degrau de
-laranja não alcança os 3:1 em nenhum dos modos, e o neutro é também o que
-"Outros" quer dizer. Entre fatias vizinhas vai um fio da cor do fundo, porque
-dois degraus de luminosidade encostados leem-se como uma mancha só.
+The slices use `Palette.modelShare`: opaque tones separated mostly by
+**luminosity** (under deuteranopia the red-green axis disappears; luminosity and
+yellow-blue remain), with a hue drift on top to add separation for those who see
+all the colors. Each tone measures ≥3:1 against the window background and ≥4.5:1
+against its own ink (`Palette.ink`, which picks black or white by measured
+luminance), verified in `ModelShareContrastTests`. There are three steps plus one
+neutral: the fourth orange step does not reach 3:1 in either mode, and the neutral
+is also what "Others" means. Between adjacent slices runs a hairline in the
+background color, because two adjacent luminosity steps read as a single mass.
 
-`ChartSpan` resolve o intervalo do eixo. A janela de 5h é ancorada no reset
-(`resets_at − 5h` até `resets_at`), não em "agora": um range rolante de
-"últimas 5h" atravessaria o reset e desenharia um penhasco de 90% para 0% que
-parece queda de uso e não é. É o mesmo artefato que o `PaceEstimator` já
-descarta para não corromper a projeção. Sem reset conhecido, recua para o
-intervalo rolante. A janela começa sempre depois de `agora − 5h` (o reset está
-no futuro), então carregar 5h de histórico cobre-a inteira.
+`ChartSpan` resolves the axis range. The 5-hour window is anchored to the reset
+(`resets_at − 5h` to `resets_at`), not to "now": a rolling "last 5 hours" range
+would cross the reset and draw a cliff from 90% to 0% that looks like a drop in
+usage but isn't. It's the same artifact `PaceEstimator` discards to avoid
+corrupting the projection. With no known reset, it falls back to the rolling range.
+The window always starts after `now − 5h` (the reset is in the future), so loading
+5 hours of history covers it in full.
 
-O eixo Y é sempre 0-100% do limite do próprio plano, nunca auto-escalado aos
-dados: a Anthropic não publica limites absolutos, apenas múltiplos relativos, e
-a percentagem é a única escala que significa o mesmo num Pro e num Max 20x.
-Auto-escalar faria 18% de uso desenhar uma montanha.
+The Y axis is always 0-100% of the plan's own limit, never auto-scaled to the
+data: Anthropic does not publish absolute limits, only relative multiples, and the
+percentage is the only scale that means the same thing on a Pro and on a Max 20x.
+Auto-scaling would make 18% of usage draw a mountain.
 
-A legenda e o rodapé seguem o que o payload traz: em planos sem limite semanal,
-a série de 7 dias some em vez de deixar uma legenda apontando para uma linha
-inexistente.
+The legend and footer follow what the payload carries: on plans with no weekly
+limit, the 7-day series disappears instead of leaving a legend pointing to a
+nonexistent line.
 
 ### `AboutWindow.swift`
 
-Janela Sobre com o esqueleto do painel Sobre do sistema: ícone, nome, versão,
-uma linha e a assinatura de Guilherme Rozenblat com a bandeira. O ícone traz um
-anel de doze traços que acendem em sequência, e os blocos entram em cascata de
-45 ms. O anel é desenho original: reproduzir a marca da Anthropic num app de
-terceiros é terreno de marca registada. O fundo usa `NSVisualEffectView`, o
-equivalente translúcido nativo compatível com macOS 13, e se adapta ao modo
-claro/escuro. As animações respeitam **Reduzir movimento**.
+The About window with the skeleton of the system About panel: icon, name, version,
+one line, and the signature of Guilherme Rozenblat with the flag. The icon carries
+a ring of twelve ticks that light up in sequence, and the blocks cascade in at 45
+ms. The ring is an original drawing: reproducing Anthropic's mark in a third-party
+app is trademark territory. The background uses `NSVisualEffectView`, the native
+translucent equivalent compatible with macOS 13, and adapts to light/dark mode. The
+animations respect **Reduce Motion**.
 
 ### `GlobalShortcut.swift`
 
-Atalho global opcional (⌥⌘U) via `RegisterEventHotKey` do Carbon, a API do
-sistema para atalhos globais e a única que não exige permissão de
-Acessibilidade (`NSEvent.addGlobalMonitorForEvents` exige). Desligado por
-padrão: um atalho global tira a combinação de todos os outros apps. Quando o
-sistema recusa o registro (outro app chegou primeiro), `setEnabled` devolve
-`false` e a caixa nos Ajustes recua em vez de prometer um atalho inexistente.
+An optional global shortcut (⌥⌘U) via Carbon's `RegisterEventHotKey`, the system
+API for global shortcuts and the only one that does not require an Accessibility
+permission (`NSEvent.addGlobalMonitorForEvents` does). Off by default: a global
+shortcut takes the combination away from every other app. When the system refuses
+the registration (another app got there first), `setEnabled` returns `false` and
+the checkbox in Settings backs off instead of promising a nonexistent shortcut.
 
 ### `SettingsManager.swift`
 
-Migra a integração Node legada sem substituir o backup original. Instalações
-subsequentes atualizam o caminho do executável caso o app tenha sido movido.
+Migrates the legacy Node integration without replacing the original backup.
+Subsequent installs update the executable path in case the app has moved.
 
-Na remoção, restaura a status line anterior. Uma configuração alterada pelo
-usuário depois da instalação é preservada.
+On removal, it restores the previous status line. A configuration the user changed
+after installation is preserved.
 
 ### `StateStore.swift`
 
-Persiste `state.json` de forma atômica. O diretório usa permissão `0700` e o
-arquivo usa `0600`. A leitura diferencia arquivo ausente de JSON inválido.
-O decoder migra automaticamente as chaves `lastUsage` e `updatedAt` da versão
-3.1 para o formato atual.
+Persists `state.json` atomically. The directory uses `0700` permissions and the
+file uses `0600`. Reads distinguish a missing file from invalid JSON. The decoder
+automatically migrates the `lastUsage` and `updatedAt` keys from version 3.1 to the
+current format.
 
-## Notificações
+## Notifications
 
-A detecção e a entrega são separadas, com uma única fonte de verdade:
+Detection and delivery are separate, with a single source of truth:
 
-- **Ingest (`ThresholdTracker`)** registra em `state.json` quais marcos cada
-  janela cruzou (`notifiedThresholds` para 5 horas, `sevenDayNotifiedThresholds`
-  para 7 dias), mesmo com o app fechado. A mudança de `resets_at` ou uma queda
-  superior a 10 pontos limpa os marcos.
-- **App (`ThresholdDelivery`)** compara os marcos registrados com o que já foi
-  entregue (UserDefaults) e notifica a diferença. Se o app esteve fechado
-  durante a subida, entrega uma única notificação com o maior marco pendente em
-  vez de empilhar várias. Dados com mais de 30 minutos são marcados como
-  entregues sem alerta.
+- **Ingest (`ThresholdTracker`)** records in `state.json` which thresholds each
+  window has crossed (`notifiedThresholds` for 5 hours,
+  `sevenDayNotifiedThresholds` for 7 days), even with the app closed. A change in
+  `resets_at` or a drop of more than 10 points clears the thresholds.
+- **App (`ThresholdDelivery`)** compares the recorded thresholds with what has
+  already been delivered (UserDefaults) and notifies the difference. If the app
+  was closed during the rise, it delivers a single notification with the highest
+  pending threshold instead of stacking several. Data more than 30 minutes old is
+  marked as delivered without an alert.
 
-Os marcos são 25%, 50%, 75%, 90% e 100% da janela de 5 horas e 75%, 90% e 100%
-da janela de 7 dias. Quando uma janela que atingiu 75% ou mais reinicia, o app
-anuncia **uso liberado** uma vez, até 30 minutos após o reset
+The thresholds are 25%, 50%, 75%, 90%, and 100% of the 5-hour window and 75%, 90%,
+and 100% of the 7-day window. When a window that reached 75% or more resets, the
+app announces **usage freed** once, up to 30 minutes after the reset
 (`WindowResetAnnouncement`).
 
-A aba **Alertas** dos Ajustes permite desligar cada tipo de alerta e pausar
-tudo por 1 hora. O snooze segura os alertas sem marcá-los como entregues: ao expirar,
-cruzamentos ainda recentes são notificados e os antigos caem na regra de idade.
+The **Alerts** tab in Settings lets you turn off each alert type and pause
+everything for 1 hour. The snooze holds alerts without marking them as delivered:
+when it expires, still-recent crossings are notified and old ones fall under the
+age rule.
 
-A ingestão continua atualizando o cache mesmo quando a interface não está em
-execução; a entrega das notificações acontece quando o app abre.
+Ingest keeps updating the cache even when the interface is not running;
+notification delivery happens when the app opens.
 
-## Build e bundle
+## Build and bundle
 
-Swift Package Manager compila o produto `ClaudeUsageMonitor`. O script
-`build-app.command` roda os testes, compila **universal (arm64 + x86_64)** por
-padrão (`UNIVERSAL=0` desliga), cria a estrutura `.app` e valida o bundle com
-`codesign` e `plutil`. Requer macOS 13 ou mais recente.
+Swift Package Manager builds the `ClaudeUsageMonitor` product. The
+`build-app.command` script runs the tests, builds **universal (arm64 + x86_64)** by
+default (`UNIVERSAL=0` turns it off), creates the `.app` structure, and validates
+the bundle with `codesign` and `plutil`. Requires macOS 13 or newer.
 
-Assinatura e notarização para distribuição:
+Signing and notarization for distribution:
 
 ```zsh
-# uma vez: xcrun notarytool store-credentials notary --apple-id ... --team-id ...
-CODESIGN_IDENTITY="Developer ID Application: Nome (TEAMID)" \
+# once: xcrun notarytool store-credentials notary --apple-id ... --team-id ...
+CODESIGN_IDENTITY="Developer ID Application: Name (TEAMID)" \
 NOTARY_PROFILE="notary" \
 ./build-app.command
 ```
 
-Sem essas variáveis a assinatura é ad hoc (uso local). Com `CODESIGN_IDENTITY`
-o app é assinado com hardened runtime; com `NOTARY_PROFILE` o zip é submetido
-ao notarytool, o ticket é grampeado e `dist/ClaudeUsageMonitor-<versão>.zip`
-fica pronto para distribuição.
+Without those variables, the signature is ad hoc (local use). With
+`CODESIGN_IDENTITY` the app is signed with the hardened runtime; with
+`NOTARY_PROFILE` the zip is submitted to notarytool, the ticket is stapled, and
+`dist/ClaudeUsageMonitor-<version>.zip` is ready for distribution.

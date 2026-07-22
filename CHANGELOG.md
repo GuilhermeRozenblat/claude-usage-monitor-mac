@@ -1,370 +1,376 @@
-# Histórico de mudanças
+# Changelog
 
 ## 3.6.0 - 2026-07-22
 
 ### Interface
 
-- substitui o NSMenu por um painel ancorado à barra, na forma que a Apple usa
-  nos próprios extras (Wi-Fi, Som, Central de Controlo). Um NSMenu dimensiona-se
-  pelo item mais largo e desenha a própria moldura, o que impedia o vidro do
-  sistema e exigia truncar títulos por aritmética de fontes; o painel dispensou
-  essa maquinaria inteira;
-- adota Liquid Glass (`NSGlassEffectView`) no macOS 26, com recuo para
-  `NSVisualEffectView` nas versões anteriores. O piso continua em macOS 13;
-- desenha a sombra do painel em vez de usar a da janela: o macOS a deriva do
-  alpha do backing, o vidro é composto na GPU e não escreve lá os cantos, e o
-  resultado era uma sombra quadrada à volta de um painel arredondado;
-- reúne os ajustes numa janela própria (⌘,) com abas Geral e Alertas. Antes
-  estavam espalhados por três submenus e não havia ⌘, nenhum;
-- a aba Geral abre com a identidade do app: ícone, versão e autoria;
-- troca o motivo animado do Sobre por um anel de doze traços de desenho
-  original, respeitando **Reduzir movimento**;
-- a barra de ações do painel ganha o ⓘ do Sobre ao lado do gráfico e perde o
-  ícone de copiar, que passou para o menu "•••" com as outras ações raras;
-- o Sobre fica com o esqueleto do painel Sobre do sistema: ícone, nome, versão,
-  uma linha e a autoria. Saíram a descrição (repetia a status line e a
-  privacidade que os Ajustes já explicam), o cartão da autoria (moldura dentro
-  de moldura) e o selo verde "Feito no Brasil", que dizia com texto o que a
-  bandeira ao lado já dizia. A autoria continua legível para o VoiceOver;
-- o Sobre anima a entrada: cada bloco sobe 8 pt e aparece, 45 ms depois do
-  anterior. O halo pulsante saiu: com o anel a girar eram dois movimentos
-  contínuos a disputar o mesmo ícone.
+- replaces the NSMenu with a panel anchored to the menu bar, the way Apple does
+  it in its own extras (Wi-Fi, Sound, Control Center). An NSMenu sizes itself to
+  its widest item and draws its own frame, which blocked the system glass and
+  forced titles to be truncated by font arithmetic; the panel drops that whole
+  machinery;
+- adopts Liquid Glass (`NSGlassEffectView`) on macOS 26, falling back to
+  `NSVisualEffectView` on earlier versions. The floor is still macOS 13;
+- draws the panel's shadow itself instead of using the window's: macOS derives it
+  from the backing alpha, the glass is composited on the GPU and does not write
+  its corners there, and the result was a square shadow around a rounded panel;
+- gathers the settings into a dedicated window (⌘,) with General and Alerts tabs.
+  They were previously scattered across three submenus, with no ⌘, at all;
+- the General tab opens with the app's identity: icon, version, and authorship;
+- swaps the animated About motif for an original twelve-stroke ring, respecting
+  **Reduce Motion**;
+- the panel's action bar gains the About ⓘ next to the chart and loses the copy
+  icon, which moved to the "•••" menu with the other rare actions;
+- About takes on the skeleton of the system About panel: icon, name, version, a
+  single line, and authorship. Out went the description (it repeated the status
+  line and the privacy points Settings already explains), the authorship card
+  (a frame inside a frame), and the green "Made in Brazil" seal, which spelled
+  out in text what the flag beside it already said. Authorship stays legible to
+  VoiceOver;
+- About animates on entry: each block rises 8 pt and fades in, 45 ms after the
+  previous one. The pulsing halo is gone: with the ring spinning, it was two
+  continuous motions competing over the same icon.
 
-### Status line do terminal
+### Terminal status line
 
-- a linha impressa no Claude Code ganha cor: o percentual de cada janela vira
-  verde, âmbar ou vermelho conforme a faixa de uso (limiar crítico em 90%), em
-  negrito, para ler o risco num relance sem contar dígitos;
-- passa a mostrar o **modelo** e o **esforço de raciocínio** da sessão daquele
-  terminal (ex.: `Fable 5 (high)`), lidos dos campos oficiais da status line;
-- o tempo até o reset fica compacto (`↻ 4h27m`) com um símbolo Unicode padrão,
-  que renderiza em qualquer fonte de terminal, sem depender de Nerd Fonts;
-- a cor respeita as convenções `NO_COLOR` e `TERM=dumb`: em pipe ou terminal
-  sem cor, a linha sai em texto limpo.
+- the line printed in Claude Code gains color: each window's percentage turns
+  green, amber, or red according to the usage band (critical threshold at 90%),
+  in bold, to read the risk at a glance without counting digits;
+- now shows the session's **model** and **reasoning effort** for that terminal
+  (e.g., `Fable 5 (high)`), read from the status line's official fields;
+- time until reset is compact (`↻ 4h27m`) with a standard Unicode symbol that
+  renders in any terminal font, with no dependency on Nerd Fonts;
+- color respects the `NO_COLOR` and `TERM=dumb` conventions: in a pipe or a
+  color-less terminal, the line comes out as clean text.
 
-### Funcionalidades
+### Features
 
-- **Para onde foi o consumo**: o histórico reparte o período pelos modelos que
-  responderam, numa barra sob o gráfico. A status line não informa limites por
-  modelo, mas informa qual estava ativo, e o app deitava esse dado fora: agora
-  cada amostra guarda o modelo (`m`) e o que a janela sobe entre duas amostras
-  conta para o modelo da mais recente. É atribuição, não leitura, e por isso a
-  barra só aparece com dois modelos ou mais: com um só ela seria uma faixa
-  cheia de uma cor, que num ecrã de limites se lê como "100% usado". Uma barra
-  empilhada compara os modelos entre si e uma barra por modelo compara cada um
-  com o período inteiro, que é a leitura que uma fatia estreita não dá;
-- a barra combinada escreve o nome do modelo dentro da respetiva fatia,
-  quando lá cabe inteiro (sem reticências: "Op…" não nomeia nada, e o nome
-  completo está na linha logo abaixo). A tinta é preta ou branca conforme a
-  luminância da fatia, porque a rampa vai de um pêssego claro a um castanho
-  escuro e nenhuma tinta fixa serve para as duas pontas;
-- as cores da repartição são tons opacos separados por luminosidade, medidos
-  contra o fundo real da janela (`ModelShareContrastTests`). Antes eram o
-  laranja da marca com alpha, e o tom mais fraco chegava a 1.5:1 contra o
-  fundo, ou seja, invisível. Os degraus ocupam toda a faixa que o fundo
-  permite e a matiz deriva por cima (o claro puxa ao amarelo, o escuro ao
-  vermelho), o que soma separação sem tirar nada a quem tem daltonismo: a
-  luminosidade e o eixo amarelo-azul sobrevivem à deuteranopia, o
-  vermelho-verde não. São três degraus quentes e não quatro porque o quarto
-  já não alcança os 3:1 contra o fundo em nenhum dos modos, e por isso o
-  quarto lugar é neutro, que é também o que "Outros" quer dizer;
-- **atalho global ⌥⌘U** (opcional, desligado por omissão) para abrir o painel
-  com qualquer app à frente, na aba Geral dos Ajustes. Usa `RegisterEventHotKey`,
-  a API do sistema que não pede permissão de Acessibilidade. Se outro app já
-  tiver a combinação, a caixa recua e diz porquê em vez de prometer um atalho
-  que não existe.
+- **Where the usage went**: history splits the period across the models that
+  responded, in a bar beneath the chart. The status line does not report
+  per-model limits, but it does report which model was active, and the app was
+  throwing that data away: now each sample stores the model (`m`), and whatever
+  the window climbs between two samples counts toward the model of the most
+  recent one. This is attribution, not measurement, which is why the bar only
+  appears with two or more models: with just one it would be a bar filled with a
+  single color, which on a limits screen reads as "100% used". A stacked bar
+  compares the models against each other, and a per-model bar compares each one
+  against the whole period, which is the reading a thin slice cannot give;
+- the combined bar writes the model's name inside its own slice when it fits
+  whole (no ellipsis: "Op…" names nothing, and the full name is on the line right
+  below). The ink is black or white depending on the slice's luminance, because
+  the ramp runs from a light peach to a dark brown and no fixed ink works for
+  both ends;
+- the split colors are opaque tones separated by luminance, measured against the
+  window's real background (`ModelShareContrastTests`). They used to be the
+  brand orange with alpha, and the weakest tone reached 1.5:1 against the
+  background, that is, invisible. The steps take up the whole range the
+  background allows and the hue is derived on top (light pulls toward yellow,
+  dark toward red), which adds separation without costing anything to people with
+  color blindness: luminance and the yellow-blue axis survive deuteranopia,
+  red-green does not. There are three warm steps and not four because the fourth
+  no longer reaches 3:1 against the background in either mode, and so the fourth
+  place is neutral, which is also what "Other" means;
+- **global shortcut ⌥⌘U** (optional, off by default) to open the panel with any
+  app in front, in the General tab of Settings. It uses `RegisterEventHotKey`,
+  the system API that does not require Accessibility permission. If another app
+  already holds the combination, the box backs off and says why instead of
+  promising a shortcut that does not exist.
 
-### Gráficos
+### Charts
 
-- adiciona a **janela de 5 h corrente** ao histórico, ancorada no reset
-  (`resets_at − 5h` até `resets_at`) e não nas últimas 5 h corridas: um range
-  rolante atravessaria o reset e desenharia um penhasco de 90% para 0% que
-  parece queda de uso e não é;
-- o mini-gráfico do painel passa a mostrar essa mesma janela. Em 24 h ele
-  cruzava cerca de cinco resets e virava um serrote que nada dizia da janela em
-  curso;
-- marca "agora" no eixo, que termina no reset;
-- mantém o eixo Y fixo em 0-100% do limite do próprio plano, sem auto-escala: a
-  Anthropic publica apenas múltiplos relativos, nunca números absolutos, e a
-  percentagem é a única escala que significa o mesmo num Pro e num Max 20x.
+- adds the **current 5-hour window** to history, anchored to the reset
+  (`resets_at − 5h` through `resets_at`) rather than the last 5 hours elapsed: a
+  rolling range would cross the reset and draw a cliff from 90% to 0% that looks
+  like a drop in usage but is not;
+- the panel's mini-chart now shows that same window. Over 24 h it crossed about
+  five resets and turned into a sawtooth that said nothing about the window in
+  progress;
+- marks "now" on the axis, which ends at the reset;
+- keeps the Y axis fixed at 0-100% of the plan's own limit, with no auto-scaling:
+  Anthropic publishes only relative multiples, never absolute numbers, and the
+  percentage is the only scale that means the same thing on a Pro and on a
+  Max 20x.
 
-### Compatibilidade entre planos
+### Cross-plan compatibility
 
-- detecta cobrança por chave de API e explica que não existem janelas de uso.
-  A status line não envia `rate_limits` para chave de API, Console, Bedrock,
-  Vertex, Foundry nem Enterprise por consumo, e o app ficava eternamente em
-  "aguardando dados" para essas contas;
-- quando o limite de 7 dias não vem, o gráfico esconde a série e o rodapé não
-  mostra mais `7d: --`, que sugeria dado quebrado em vez de limite inexistente;
-- o medidor de 7 dias explica no tooltip que limites específicos do plano (como
-  o semanal de Sonnet no Max) não são informados pela status line.
+- detects API-key billing and explains that there are no usage windows. The
+  status line does not send `rate_limits` for API keys, Console, Bedrock,
+  Vertex, Foundry, or consumption-based Enterprise, and the app sat forever on
+  "waiting for data" for those accounts;
+- when the 7-day limit does not come, the chart hides the series and the footer
+  no longer shows `7d: --`, which suggested broken data rather than a
+  nonexistent limit;
+- the 7-day gauge explains in its tooltip that plan-specific limits (such as the
+  weekly Sonnet limit on Max) are not reported by the status line.
 
-### Correções de estabilidade e segurança
+### Stability and security fixes
 
-Achados de uma revisão dirigida a falhas, cada um reproduzido antes de ser
-corrigido e coberto por teste depois:
+Findings from a review aimed at failures, each reproduced before being fixed and
+covered by a test afterward:
 
-- **o custo acumulado somava sessões concorrentes umas por cima das outras.**
-  O `c` de cada amostra é o custo acumulado *daquela* sessão do Claude Code, mas
-  o `history.jsonl` é um só para todas: com dois projetos abertos as amostras
-  intercalam-se (US$ 3,00 da sessão A, US$ 0,05 da B, US$ 3,05 da A...) e cada
-  alternância era lida como sessão nova, voltando a somar o custo inteiro da
-  outra. Seis amostras bastavam para relatar US$ 6,22 onde se gastou US$ 0,12.
-  As amostras passam a carregar o `session_id` e a soma é feita por sessão;
-- **um payload acima de 64 KiB matava o ingest e apagava a status line.** O
-  buffer de um pipe é 64 KiB: com um payload maior e uma status line anterior
-  que não lê o stdin (o caso comum), a escrita bloqueava, o filho terminava,
-  fechava a ponta de leitura e o SIGPIPE derrubava o processo. O utilizador
-  ficava sem status line nenhuma, nem a sua nem a nossa. Agora o descritor pede
-  `F_SETNOSIGPIPE` (erro em vez de sinal, e só naquele descritor) e a escrita
-  sai da thread que cronometra, para o timeout de 1,5 s valer também quando o
-  comando anterior nunca lê o stdin;
-- **um `state.json` corrompido derrubava o app a cada arranque, para sempre.**
-  O payload era validado ao entrar, mas o cache era decodificado em bruto: um
-  `"fiveHourUsage": 1e19` decodificava sem queixa e `Int(1e19)` derrubava o
-  processo ao formatar o número. Como o arquivo decodificava, a auto-reparação
-  nunca disparava. As percentagens passam a ser validadas na decodificação, e
-  um valor impossível vira cache descartável, que é o que ele é;
-- **o histórico era lido inteiro na thread principal.** Na retenção cheia
-  (90 dias, ~130 mil linhas, 11 MB) eram 267 ms a cada ingestão para ficar com
-  as 300 linhas das últimas 5 h, e o painel abre com um `reload` síncrono. A
-  leitura passa a ser pela cauda, alargando só se preciso: 6 ms para o mesmo
-  resultado;
-- **a retenção de 90 dias só era aplicada no arranque.** Um app de barra de
-  menus fica meses ligado, e o arquivo passava do limite prometido sem nunca ser
-  podado. A poda agora corre também uma vez por dia;
-- **o gráfico da janela de 5 h desenhava a janela anterior por cima do eixo.**
-  O eixo é ancorado no reset (`reset − 5h` até `reset`), mas a carga do
-  histórico começa em `agora − 5h`, que é antes: as amostras desse pedaço são da
-  janela que já reiniciou, e sem recorte o traçado grampeava-as todas em cima do
-  eixo Y (uma cerca vertical de 0 a 98% colada ao 0%). Pior: o rodapé anunciava
-  o pico delas ("Pico: 5 h 97,5%") como se fosse o da janela em curso, que ia em
-  20%. As amostras passam a ser recortadas ao eixo, e o pico e a repartição por
-  modelo saem do mesmo recorte;
-- o rótulo **agora** escrevia por cima da nota do eixo quando a janela tinha
-  acabado de começar ("% do limite do seu planagora"), e a leitura sob o cursor
-  disputava a mesma faixa. O **agora** passou para dentro do gráfico, ao lado da
-  linha, e a nota cede a faixa ao cursor;
-- a repartição por modelo, quando escondida (o caso de quem usa um modelo só),
-  continuava a ocupar a altura da renderização anterior: eram ~46 pt roubados ao
-  gráfico para sempre, e até ~110 pt depois de ver um período com três modelos;
-- a nota de rodapé dos Ajustes calculava a quebra de linha numa largura 12 pt
-  maior que a coluna real, e a última palavra podia cortar;
-- `uninstall.command` deixa de apagar o backup da status line quando não
-  consegue restaurá-la (o app já ter ido para o lixo antes do script era o
-  caminho comum, e o backup ia junto: a status line original ficava perdida e o
-  `settings.json` apontando para um binário inexistente). Agora ele explica o
-  que fazer e não apaga nada;
-- a guarda de quarentena de `build-app.command` e `prepare-local.command` era
-  letra morta: `xattr -r -p` só devolve 0 quando **todos** os arquivos têm o
-  atributo, e a guarda usava isso como "algum tem?". Com um arquivo em
-  quarentena ela ficava calada, e o `prepare-local` ainda dizia "quarentena
-  removida e permissões verificadas" sem ter verificado;
-- `install.command` copia o app ao lado e só depois troca (antes apagava o app
-  instalado e, se a cópia falhasse, o utilizador ficava sem nenhum), e explica o
-  que houve quando a status line não pode ser configurada, em vez de sair no
-  meio deixando a instalação pela metade;
-- `source-archive.command` deixa de empacotar `.env` de subpastas (os padrões só
-  casavam na raiz, apesar do comentário prometer o contrário) e o estado local de
-  ferramentas, que levava o caminho do utilizador e um hook que o destinatário
-  herdava ao abrir o projeto;
-- quem cobra por chave de API recebia "envie uma mensagem no Claude Code" nos
-  primeiros 30 s depois de abrir, à espera de um limite que a status line nunca
-  manda para esse tipo de conta. A resposta da conta agora atualiza os medidores
-  em vez de esperar o ciclo seguinte;
-- gravar em `~/.claude/settings.json` deixa de desfazer um link simbólico. A
-  gravação atômica substituía o link por uma cópia solta, e quem mantém os
-  dotfiles num repositório ficava com o repositório congelado sem aviso;
-- texto vindo do payload perde caracteres de controlo antes de ser exibido: um
-  nome de diretório com sequências de escape chegava inteiro ao terminal pelo
-  `--show`.
+- **cumulative cost was summing concurrent sessions on top of each other.** Each
+  sample's `c` is the cumulative cost of *that* Claude Code session, but
+  `history.jsonl` is a single file for all of them: with two projects open the
+  samples interleave (US$ 3.00 from session A, US$ 0.05 from B, US$ 3.05 from
+  A...) and each alternation was read as a new session, adding the other's full
+  cost all over again. Six samples were enough to report US$ 6.22 where US$ 0.12
+  was spent. Samples now carry the `session_id` and the sum is computed per
+  session;
+- **a payload over 64 KiB killed the ingest and wiped the status line.** A pipe's
+  buffer is 64 KiB: with a larger payload and a previous status line that does
+  not read stdin (the common case), the write blocked, the child exited, closed
+  the read end, and the SIGPIPE brought the process down. The user was left with
+  no status line at all, neither theirs nor ours. The descriptor now requests
+  `F_SETNOSIGPIPE` (an error instead of a signal, and only on that descriptor)
+  and the write moves off the thread that times it, so the 1.5 s timeout applies
+  even when the previous command never reads stdin;
+- **a corrupted `state.json` crashed the app on every launch, forever.** The
+  payload was validated on the way in, but the cache was decoded raw: a
+  `"fiveHourUsage": 1e19` decoded without complaint and `Int(1e19)` crashed the
+  process when formatting the number. Because the file decoded, self-repair never
+  fired. Percentages are now validated during decoding, and an impossible value
+  becomes a disposable cache, which is what it is;
+- **history was read whole on the main thread.** At full retention (90 days,
+  ~130k lines, 11 MB) it was 267 ms per ingestion just to end up with the 300
+  lines from the last 5 h, and the panel opens with a synchronous `reload`.
+  Reading now works from the tail, expanding only if needed: 6 ms for the same
+  result;
+- **the 90-day retention was only applied at launch.** A menu-bar app stays on
+  for months, and the file grew past its promised limit without ever being
+  pruned. Pruning now also runs once a day;
+- **the 5-hour window chart drew the previous window over the axis.** The axis is
+  anchored to the reset (`reset − 5h` through `reset`), but the history load
+  starts at `now − 5h`, which is earlier: the samples in that stretch belong to
+  the window that already reset, and without clipping the trace stacked them all
+  on top of the Y axis (a vertical fence from 0 to 98% glued to 0%). Worse: the
+  footer announced their peak ("Peak: 5 h 97.5%") as if it were the current
+  window's, which was at 20%. Samples are now clipped to the axis, and the peak
+  and the per-model split come from the same clip;
+- the **now** label wrote over the axis note when the window had just started
+  ("% of your plan's limitnow"), and the readout under the cursor competed for
+  the same strip. **now** moved inside the chart, beside the line, and the note
+  yields the strip to the cursor;
+- the per-model split, when hidden (the case of anyone using a single model),
+  kept occupying the height of the previous render: it was ~46 pt stolen from the
+  chart forever, and up to ~110 pt after viewing a period with three models;
+- the Settings footer note computed its line breaks at a width 12 pt wider than
+  the real column, and the last word could get cut off;
+- `uninstall.command` no longer deletes the status line backup when it cannot
+  restore it (the app already being in the trash before the script ran was the
+  common path, and the backup went with it: the original status line was lost and
+  `settings.json` pointed at a nonexistent binary). It now explains what to do and
+  deletes nothing;
+- the quarantine guard in `build-app.command` and `prepare-local.command` was
+  dead letter: `xattr -r -p` only returns 0 when **every** file has the
+  attribute, and the guard used that as "does any have it?". With one file in
+  quarantine it stayed silent, and `prepare-local` still said "quarantine removed
+  and permissions verified" without having verified;
+- `install.command` copies the app alongside and only then swaps (it used to
+  delete the installed app first, and if the copy failed the user was left with
+  none), and explains what happened when the status line cannot be configured,
+  instead of bailing midway and leaving the install half-done;
+- `source-archive.command` no longer bundles `.env` files from subfolders (the
+  patterns only matched at the root, despite the comment promising otherwise) or
+  local tool state, which carried the user's path and a hook the recipient
+  inherited on opening the project;
+- users billed by API key got "send a message in Claude Code" in the first 30 s
+  after opening, waiting for a limit the status line never sends for that kind of
+  account. The account's response now updates the gauges instead of waiting for
+  the next cycle;
+- writing to `~/.claude/settings.json` no longer undoes a symlink. The atomic
+  write replaced the link with a loose copy, and anyone keeping their dotfiles in
+  a repository ended up with the repository frozen without warning;
+- text coming from the payload has its control characters stripped before being
+  displayed: a directory name with escape sequences reached the terminal intact
+  through `--show`.
 
-### Auditoria de release
+### Release audit
 
-- painel responde a **⌘W** e o ícone da barra ganha menu de **clique-direito**
-  (copiar resumo, histórico, ajustes, encerrar), as duas convenções dos extras
-  do sistema;
-- a janela de Histórico lembra posição e tamanho entre execuções, e o seletor
-  de período deixa de atropelar a legenda na largura mínima (a legenda trunca
-  com tooltip);
-- toda leitura do histórico sai da thread principal (refresh periódico da
-  janela aberta, export CSV e cache de 7 dias): com 90 dias de retenção a
-  decodificação custava ~270 ms por ciclo na UI;
-- **Copiar resumo de uso** e **Atualizar exibição** confirmam inline na linha
-  de estado; o refresh manual só notifica quando o painel não está à vista, e
-  deixa de pedir permissão de notificação para uma ação já visível na tela;
-- VoiceOver: medidores, cabeçalho, tendência, linhas de estado e grade da
-  sessão viram elementos de acessibilidade reais (antes os rótulos montados
-  eram ignorados e os campos lidos soltos);
-- detalhe truncado dos medidores ganha tooltip com o texto completo; menu
-  principal (invisível, mas lido pelo VoiceOver) localizado nos três idiomas;
-- remove código morto (`RateLimitParser`, `SettingsManager.isInstalled`,
-  `L10n.languageMenuTitle`) apontando os testes para os caminhos reais;
-- adiciona LICENSE (MIT), categoria do app no Info.plist
-  (`public.app-category.developer-tools`) e `docs/RELEASE.md` com o processo
-  completo de assinatura, notarização e publicação.
+- the panel responds to **⌘W** and the menu bar icon gains a **right-click** menu
+  (copy summary, history, settings, quit), the two conventions of the system
+  extras;
+- the History window remembers its position and size between runs, and the period
+  selector no longer runs over the legend at minimum width (the legend truncates
+  with a tooltip);
+- every read of history moves off the main thread (periodic refresh of the open
+  window, CSV export, and the 7-day cache): at 90 days of retention, decoding cost
+  ~270 ms per cycle on the UI;
+- **Copy usage summary** and **Refresh display** confirm inline in the status
+  line; the manual refresh only notifies when the panel is out of view, and no
+  longer asks for notification permission for an action already visible on
+  screen;
+- VoiceOver: gauges, header, trend, status lines, and the session grid become
+  real accessibility elements (the assembled labels used to be ignored and the
+  fields read loose);
+- a gauge's truncated detail gains a tooltip with the full text; the main menu
+  (invisible, but read by VoiceOver) is localized in all three languages;
+- removes dead code (`RateLimitParser`, `SettingsManager.isInstalled`,
+  `L10n.languageMenuTitle`), pointing the tests at the real paths;
+- adds LICENSE (MIT), the app category in Info.plist
+  (`public.app-category.developer-tools`), and `docs/RELEASE.md` with the full
+  signing, notarization, and publishing process.
 
-### Correções
+### Fixes
 
-- os formatos de hora deixam de fixar 24 horas em todos os idiomas: o relógio
-  agora vem do locale, então o inglês dos EUA volta a ler "2:32 PM" e o espanhol
-  perde o zero à esquerda;
-- alinha o vocabulário do gráfico ao do painel ("Limite de 5 horas", não "Janela
-  de 5 horas" para a mesma coisa);
-- copyright do Info.plist em inglês, alinhado ao `CFBundleDevelopmentRegion`;
-- reescreve a copy do Sobre, que descrevia o app sem dizer o que ele faz.
+- time formats no longer pin 24-hour across all languages: the clock now comes
+  from the locale, so US English reads "2:32 PM" again and Spanish drops the
+  leading zero;
+- aligns the chart's vocabulary with the panel's ("5-hour limit", not "5-hour
+  window" for the same thing);
+- Info.plist copyright in English, aligned with `CFBundleDevelopmentRegion`;
+- rewrites the About copy, which described the app without saying what it does.
 
-### Interno
+### Internal
 
-- mostra no cabeçalho a conta confirmada pelo `claude auth status`, sem ler ou
-  persistir tokens e sem reaproveitar e-mail OAuth quando a sessão usa API key;
-- remove a quarentena herdada da transferência do projeto e adiciona
-  `prepare-local.command` para preparar futuras cópias sem `sudo`;
-- adiciona `.gitignore` e `source-archive.command` para impedir que caches,
-  binários, certificados e metadados locais sejam transportados com o fonte;
-- estabiliza o bundle ID como `com.guilhermerozenblat.ClaudeUsageMonitor`;
-- reforça o release universal com validação das duas arquiteturas, hardened
-  runtime também no build local, ticket notarizado, `stapler validate` e
-  avaliação final do Gatekeeper;
-- amplia a suíte para 145 testes.
+- shows in the header the account confirmed by `claude auth status`, without
+  reading or persisting tokens and without reusing the OAuth email when the
+  session uses an API key;
+- removes the quarantine inherited from transferring the project and adds
+  `prepare-local.command` to prepare future copies without `sudo`;
+- adds `.gitignore` and `source-archive.command` to keep caches, binaries,
+  certificates, and local metadata from being shipped with the source;
+- stabilizes the bundle ID as `com.guilhermerozenblat.ClaudeUsageMonitor`;
+- hardens the universal release with validation of both architectures, hardened
+  runtime in the local build too, a notarized ticket, `stapler validate`, and a
+  final Gatekeeper assessment;
+- grows the suite to 145 tests.
 
 ## 3.5.0 - 2026-07-16
 
-- adiciona **previsão de ritmo (burn rate)**: regressão linear sobre as
-  amostras dos últimos 45 minutos projeta quando a janela de 5 horas atinge
-  100% ("No ritmo atual: 100% às 14:32"); sem projeção quando o ritmo é
-  irrelevante, o dado está obsoleto ou o reset chega antes; uma queda de uso
-  dentro da janela de análise descarta a janela anterior;
-- adiciona **sparkline das últimas 24 horas** no menu, logo abaixo do medidor
-  de 5 horas, com a projeção de ritmo (ou o pico do período) ao lado;
-- adiciona **perfis de marcos** no submenu Alertas: todos (padrão), a partir
-  de 75% ou só críticos (90%+); o ingest continua registrando todos os marcos
-  e a troca de perfil não gera notificações retroativas;
-- registra o **custo de API por amostra** no histórico e mostra o custo
-  estimado acumulado de 24 h e 7 dias nos detalhes da sessão (soma de aumentos,
-  robusta a sessões novas);
-- adiciona **Exportar… (CSV)** na janela de histórico
+- adds **pace (burn rate) forecasting**: a linear regression over the samples
+  from the last 45 minutes projects when the 5-hour window hits 100% ("At the
+  current pace: 100% at 14:32"); no projection when the pace is irrelevant, the
+  data is stale, or the reset arrives first; a drop in usage within the analysis
+  window discards the previous window;
+- adds a **24-hour sparkline** to the menu, right below the 5-hour gauge, with the
+  pace projection (or the period's peak) beside it;
+- adds **threshold profiles** to the Alerts submenu: all (default), from 75% up,
+  or critical only (90%+); the ingest keeps recording every threshold and
+  switching profiles does not generate retroactive notifications;
+- records the **API cost per sample** in history and shows the estimated
+  cumulative 24 h and 7-day cost in the session details (a sum of increases,
+  robust to new sessions);
+- adds **Export… (CSV)** to the history window
   (`timestamp,five_hour_pct,seven_day_pct,session_cost_usd`);
-- substitui o painel Sobre padrão por uma experiência autoral animada, com
-  assinatura de Guilherme Rozenblat e selo **Feito no Brasil**;
-- adiciona localização completa em espanhol e seletor persistente de idioma
-  (automático, inglês, português ou espanhol), com troca imediata e fallback
-  em inglês quando o idioma do macOS não é suportado;
-- aprimora os modos claro e escuro com materiais translúcidos nativos,
-  contrastes específicos por aparência e paletas adaptativas nos medidores,
-  gráficos e janela Sobre;
-- diferencia limites desatualizados de uma sessão ativa sem `rate_limits` e
-  troca o aviso ambíguo por orientações curtas e acionáveis;
-- compacta os textos dos medidores e remove o ano dos horários de reset;
-- serializa atualizações concorrentes de estado e histórico entre sessões do
-  Claude Code, evitando perda de campos e disputa entre poda e ingestão;
-- corrige o throttle do histórico para usar o timestamp da última amostra, sem
-  bloquear a primeira coleta depois de uma poda;
-- corrige parsing de projetos com caminhos longos, contadores iguais a zero,
-  limpeza de erros de ingestão recuperados e validação do tipo da status line;
-- passa a informar erros de gravação ao exportar o histórico;
-- o app relê o history.jsonl apenas quando o mtime muda;
-- amplia a suíte para 80 testes.
+- replaces the default About panel with an animated authorial experience, with
+  Guilherme Rozenblat's signature and a **Made in Brazil** seal;
+- adds full Spanish localization and a persistent language selector (automatic,
+  English, Portuguese, or Spanish), with immediate switching and an English
+  fallback when the macOS language is not supported;
+- refines light and dark modes with native translucent materials,
+  appearance-specific contrasts, and adaptive palettes across the gauges, charts,
+  and About window;
+- distinguishes stale limits from an active session with no `rate_limits` and
+  swaps the ambiguous warning for short, actionable guidance;
+- compacts the gauge texts and drops the year from reset times;
+- serializes concurrent state and history updates across Claude Code sessions,
+  avoiding field loss and contention between pruning and ingestion;
+- fixes the history throttle to use the last sample's timestamp, without blocking
+  the first collection after a prune;
+- fixes parsing of projects with long paths, counters equal to zero, cleanup of
+  recovered ingestion errors, and validation of the status line type;
+- now reports write errors when exporting history;
+- the app re-reads history.jsonl only when the mtime changes;
+- grows the suite to 80 tests.
 
 ## 3.4.0 - 2026-07-16
 
-- adiciona **histórico de uso com gráficos** (24h / 7 dias / 30 dias / 90 dias):
-  o ingest grava amostras em `history.jsonl` (mínimo 60s entre amostras,
-  retenção de 90 dias), e a janela **Histórico de uso…** desenha as séries de
-  5 horas e 7 dias com crosshair interativo, linha de referência em 90%,
-  legenda e pico do período; cores validadas para daltonismo nos modos claro
-  e escuro;
-- **inglês passa a ser o idioma padrão**; português (pt-BR) é usado quando é o
-  idioma preferido do sistema: UI, notificações, statusline e `--show`;
-- **binário universal** (Apple Silicon + Intel) por padrão no build;
-- suporte a **assinatura Developer ID e notarização** no `build-app.command`
-  via `CODESIGN_IDENTITY` e `NOTARY_PROFILE` (hardened runtime, notarytool,
-  stapler e zip de distribuição);
-- adiciona `docs/COMPETITORS.md` (análise competitiva com ranking de features)
-  e `docs/ROADMAP.md` (plano de desenvolvimento);
-- amplia a suíte para 56 testes.
+- adds **usage history with charts** (24h / 7 days / 30 days / 90 days): the
+  ingest writes samples to `history.jsonl` (minimum 60s between samples, 90-day
+  retention), and the **Usage history…** window draws the 5-hour and 7-day series
+  with an interactive crosshair, a reference line at 90%, a legend, and the
+  period's peak; colors validated for color blindness in light and dark modes;
+- **English becomes the default language**; Portuguese (pt-BR) is used when it is
+  the system's preferred language: UI, notifications, status line, and `--show`;
+- **universal binary** (Apple Silicon + Intel) by default in the build;
+- support for **Developer ID signing and notarization** in `build-app.command`
+  via `CODESIGN_IDENTITY` and `NOTARY_PROFILE` (hardened runtime, notarytool,
+  stapler, and a distribution zip);
+- grows the suite to 56 tests.
 
 ## 3.3.0 - 2026-07-16
 
-- unifica a detecção de marcos no `state.json` gravado pela ingestão; o app
-  passa a apenas entregar, eliminando a lógica duplicada em UserDefaults;
-- notifica marcos cruzados com o app fechado ao reabrir: uma única notificação
-  com o maior marco pendente, apenas se os dados tiverem menos de 30 minutos;
-- adiciona alertas do limite de 7 dias (75%, 90% e 100%);
-- anuncia **uso liberado** uma vez quando uma janela que atingiu 75% reinicia;
-- adiciona o submenu **Alertas** com toggles por tipo e silêncio de 1 hora;
-- sinaliza **sem dados recentes** quando o uso não é atualizado há 15 minutos
-  com a janela ainda ativa, no cabeçalho e no medidor de 5 horas;
-- substitui o polling de 3 segundos por observação do diretório de dados
-  (DispatchSource) com timer de 30 segundos apenas para transições de relógio;
-- só reparseia `~/.claude/settings.json` quando o mtime muda;
-- registra `lastIngestErrorAt` quando um payload não vazio falha no parse e
-  mostra **última leitura falhou** no menu;
-- adiciona **Copiar resumo de uso** e tooltip com o resumo completo no ícone;
-- unifica a formatação de `--show`, notificação de atualização manual e cópia
-  em um único resumo compartilhado;
-- troca o `sleep` fixo do `install.command` por espera ativa pelo encerramento
-  do processo anterior;
-- amplia a suíte para 46 testes.
+- unifies threshold detection in the `state.json` written by ingestion; the app
+  now only delivers, eliminating the duplicated logic in UserDefaults;
+- notifies thresholds crossed while the app was closed, on reopen: a single
+  notification with the highest pending threshold, only if the data is less than
+  30 minutes old;
+- adds 7-day limit alerts (75%, 90%, and 100%);
+- announces **usage freed** once when a window that reached 75% resets;
+- adds the **Alerts** submenu with per-type toggles and a 1-hour mute;
+- flags **no recent data** when usage has not been updated for 15 minutes with the
+  window still active, in the header and the 5-hour gauge;
+- replaces the 3-second polling with data-directory observation (DispatchSource)
+  plus a 30-second timer solely for clock transitions;
+- only re-parses `~/.claude/settings.json` when the mtime changes;
+- records `lastIngestErrorAt` when a non-empty payload fails to parse and shows
+  **last read failed** in the menu;
+- adds **Copy usage summary** and a tooltip with the full summary on the icon;
+- unifies the formatting of `--show`, the manual-refresh notification, and the
+  copy into a single shared summary;
+- swaps the fixed `sleep` in `install.command` for an active wait on the previous
+  process exiting;
+- grows the suite to 46 tests.
 
 ## 3.2.0 - 2026-07-15
 
-- redesenha o menu com medidores nativos de dimensões estáveis e acento Claude;
-- adiciona ícones dinâmicos para estados saudável, aguardando, atenção e erro;
-- adiciona uso da janela de contexto, tokens e percentual restante;
-- adiciona modelo, projeto, nome da sessão, esforço, thinking, duração, custo API
-  estimado e versão do Claude Code em um submenu;
-- aceita as janelas de 5 horas e 7 dias de forma independente;
-- preserva valores em cache quando um campo opcional some do payload;
-- detecta `disableAllHooks`, que impede o Claude Code de executar a status line;
-- migra automaticamente o cache 3.1 sem perder os limites existentes;
-- não persiste `transcript_path` nem o caminho completo do projeto;
-- adiciona testes de renderização AppKit e amplia a suíte para 22 testes;
-- documenta possibilidades e limitações conforme a documentação oficial.
+- redesigns the menu with native gauges of stable dimensions and a Claude accent;
+- adds dynamic icons for healthy, waiting, attention, and error states;
+- adds context-window usage, tokens, and percentage remaining;
+- adds model, project, session name, effort, thinking, duration, estimated API
+  cost, and Claude Code version in a submenu;
+- accepts the 5-hour and 7-day windows independently;
+- preserves cached values when an optional field drops from the payload;
+- detects `disableAllHooks`, which prevents Claude Code from running the status
+  line;
+- automatically migrates the 3.1 cache without losing the existing limits;
+- does not persist `transcript_path` or the project's full path;
+- adds AppKit rendering tests and grows the suite to 22 tests;
+- documents possibilities and limitations per the official documentation.
 
 ## 3.1.0 - 2026-07-15
 
-- adiciona tempo restante aos horários de reset;
-- deixa de apresentar como atual uma janela cujo reset já passou;
-- envia notificação com os valores de 5 horas e 7 dias no refresh manual;
-- mostra no menu o estado da integração e da permissão de notificações;
-- diferencia ausência de dados de cache inválido;
-- mantém erros de integração visíveis e apresenta falhas de ações ao usuário;
-- valida timestamps e percentuais antes de persistir;
-- normaliza o caminho da integração para um executável absoluto;
-- limita a memória usada pela saída da status line anterior durante a execução;
-- alinha menu, status line e CLI ao ocultar valores de janelas encerradas;
-- amplia a suíte de 4 para 13 testes.
+- adds time remaining to the reset times;
+- stops presenting as current a window whose reset has already passed;
+- sends a notification with the 5-hour and 7-day values on manual refresh;
+- shows the state of the integration and the notification permission in the menu;
+- distinguishes missing data from an invalid cache;
+- keeps integration errors visible and surfaces action failures to the user;
+- validates timestamps and percentages before persisting;
+- normalizes the integration path to an absolute executable;
+- caps the memory used by the previous status line's output during execution;
+- aligns menu, status line, and CLI in hiding values for closed windows;
+- grows the suite from 4 to 13 tests.
 
 ## 3.0.0 - 2026-07-15
 
-- transforma o monitor em um app nativo AppKit para a barra superior do macOS;
-- adiciona `NSStatusItem` com percentual de 5 horas sempre visível;
-- adiciona menu com limites de 5 horas e 7 dias, resets e última atualização;
-- adiciona notificações nativas com `UNUserNotificationCenter`;
-- adiciona opção de iniciar com o macOS usando `SMAppService`;
-- substitui o runtime Node por um executável Swift arm64 sem dependências;
-- adiciona bundle `LSUIElement`, assinatura ad hoc e instalação em
+- turns the monitor into a native AppKit app for the macOS menu bar;
+- adds an `NSStatusItem` with the 5-hour percentage always visible;
+- adds a menu with the 5-hour and 7-day limits, resets, and last update;
+- adds native notifications with `UNUserNotificationCenter`;
+- adds an option to start with macOS using `SMAppService`;
+- replaces the Node runtime with a dependency-free Swift arm64 executable;
+- adds an `LSUIElement` bundle, ad hoc signing, and installation in
   `~/Applications`;
-- migra automaticamente a status line da versão 2.0;
-- adiciona guias separados de uso, arquitetura, segurança e release.
+- automatically migrates the status line from version 2.0;
+- adds separate usage, architecture, security, and release guides.
 
 ## 2.0.0 - 2026-07-15
 
-- substitui a automação de `claude.ai` pelos campos oficiais `rate_limits` da
-  status line do Claude Code;
-- remove Playwright, Chromium e todas as dependências de runtime;
-- remove o LaunchAgent e a consulta em intervalo fixo;
-- adiciona limites de 5 horas e 7 dias com horários oficiais de reinício;
-- exibe a data e a hora de reinício ao lado de cada percentual;
-- preserva e restaura uma status line preexistente;
-- adiciona gravação atômica e permissões `0600` para estado e configurações;
-- adiciona testes de extração, validação e formatação dos limites;
-- documenta migração, arquitetura, limitações e modelo de segurança.
+- replaces the `claude.ai` automation with Claude Code's official `rate_limits`
+  status line fields;
+- removes Playwright, Chromium, and all runtime dependencies;
+- removes the LaunchAgent and the fixed-interval polling;
+- adds 5-hour and 7-day limits with official reset times;
+- displays the reset date and time next to each percentage;
+- preserves and restores a preexisting status line;
+- adds atomic writing and `0600` permissions for state and configuration;
+- adds extraction, validation, and formatting tests for the limits;
+- documents migration, architecture, limitations, and the security model.
 
 ## 1.0.0 - 2026-07-15
 
-- primeira versão;
-- leitura de `claude.ai/settings/usage` com um perfil persistente do Chromium;
-- notificações nos marcos de 25%, 50%, 75%, 90% e 100%;
-- execução periódica por LaunchAgent.
+- first release;
+- reads `claude.ai/settings/usage` with a persistent Chromium profile;
+- notifications at the 25%, 50%, 75%, 90%, and 100% thresholds;
+- periodic execution via LaunchAgent.
