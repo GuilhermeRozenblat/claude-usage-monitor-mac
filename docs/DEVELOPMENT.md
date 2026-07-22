@@ -129,6 +129,10 @@ Registre a mudança em `CHANGELOG.md` antes de gerar o artefato.
 
 ## Assinatura para distribuição
 
+O passo a passo completo de publicação (conta Apple Developer, certificado,
+notarização e GitHub Release) está em [RELEASE.md](RELEASE.md); esta seção é o
+resumo operacional.
+
 Sem variáveis de ambiente, o `build-app.command` assina ad hoc (uso local).
 Para distribuição pública, o próprio script cuida do fluxo completo:
 

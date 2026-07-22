@@ -79,6 +79,8 @@ final class MonitorHeaderView: NSView {
 
     init() {
         super.init(frame: .zero)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.group)
 
         iconView.symbolConfiguration = .init(pointSize: 17, weight: .medium)
         iconView.setContentHuggingPriority(.required, for: .horizontal)
@@ -150,6 +152,8 @@ final class TrendView: NSView {
 
     init() {
         super.init(frame: .zero)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
         label.font = .systemFont(ofSize: 11, weight: .regular)
         label.textColor = .secondaryLabelColor
         label.lineBreakMode = .byTruncatingTail
@@ -323,6 +327,11 @@ final class UsageMeterView: NSView {
 
     init(title: String) {
         super.init(frame: .zero)
+        // Elemento de verdade, não só um label pendurado: um NSView puro não é
+        // elemento de acessibilidade e o VoiceOver ignorava o resumo do update,
+        // lendo os campos soltos e pulando a barra desenhada à mão.
+        setAccessibilityElement(true)
+        setAccessibilityRole(.group)
 
         titleField.font = .systemFont(ofSize: 12, weight: .medium)
         titleField.textColor = .labelColor
@@ -376,6 +385,9 @@ final class UsageMeterView: NSView {
     ) {
         valueField.stringValue = value
         detailField.stringValue = detail
+        // Mesma estratégia truncar+tooltip do resto do painel: detalhes longos
+        // (ex. o aviso de plano com chave de API) não cabem nos 340 pt.
+        detailField.toolTip = detail
         progress.value = min(100, max(0, percentage ?? 0))
         progress.fillColor = Palette.meter(for: percentage)
         progress.alphaValue = isAvailable ? 1 : 0.28

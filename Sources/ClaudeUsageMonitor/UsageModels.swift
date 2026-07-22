@@ -403,12 +403,6 @@ enum StatusLineParser {
     }
 }
 
-enum RateLimitParser {
-    static func parse(_ data: Data) -> RateLimits? {
-        StatusLineParser.parse(data)?.rateLimits
-    }
-}
-
 enum UsageDataRecency: Equatable {
     case fresh
     case recentSessionWithoutLimits
@@ -430,6 +424,23 @@ enum UsageDataRecency: Equatable {
             return .recentSessionWithoutLimits
         }
         return .stale(usageAge)
+    }
+}
+
+/// Cor ANSI 256 pra statusline do terminal, que o Claude Code renderiza.
+/// Desligada por `NO_COLOR` (convenção) — pipes e CI saem em texto limpo.
+private enum Ansi {
+    static let reset = "\u{001B}[0m"
+    static var enabled: Bool {
+        let env = ProcessInfo.processInfo.environment
+        return env["NO_COLOR"] == nil && env["TERM"] != "dumb"
+    }
+    /// Cor 256 opcionalmente em negrito. Sem `dim`: SGR 2 lava o texto e mata o
+    /// contraste. Hierarquia vem de cor + peso, não de apagar.
+    static func fg(_ code: Int, _ text: String, bold: Bool = false) -> String {
+        guard enabled else { return text }
+        let weight = bold ? "1;" : ""
+        return "\u{001B}[\(weight)38;5;\(code)m\(text)\(reset)"
     }
 }
 
@@ -585,24 +596,70 @@ enum UsageFormatter {
             }
         }
 
-        var parts: [String] = []
+        var windows: [String] = []
         if let fiveHour {
-            parts.append(statusWindow("Claude 5h", fiveHour, now: now))
+            windows.append(statusWindow("5h", fiveHour, now: now))
         }
         if let sevenDay {
-            parts.append(statusWindow("7d", sevenDay, now: now))
+            windows.append(statusWindow("7d", sevenDay, now: now))
         }
-        return parts.isEmpty ? "Claude 5h: --" : parts.joined(separator: " | ")
+        let usage = windows.isEmpty ? "5h --" : windows.joined(separator: "  ·  ")
+        return [modelSegment(state?.session), usage]
+            .compactMap { $0 }
+            .joined(separator: "  ·  ")
+    }
+
+    // Unicode padrão (não Nerd Font): renderiza em qualquer fonte de terminal,
+    // sem depender de versão. Seta circular = reset.
+    private static let resetGlyph = "↻"
+
+    /// Modelo + esforço de raciocínio da sessão do terminal, em foreground normal.
+    /// Só o percentual de uso ganha cor — é o que carrega risco.
+    private static func modelSegment(_ session: SessionSnapshot?) -> String? {
+        guard let model = session?.modelDisplayName else { return nil }
+        var text = model
+        if let effort = session?.effortLevel, !effort.isEmpty {
+            text += " (\(effort))"
+        } else if session?.thinkingEnabled == true {
+            text += " (thinking)"
+        }
+        return text
+    }
+
+    /// Semáforo por faixa de uso. Cor carrega o risco num relance; o número
+    /// deixa de precisar leitura dígito a dígito.
+    static func usageColor(_ pct: Double) -> Int {
+        switch pct {
+        case ..<70: return 34                 // verde
+        case ..<warningThreshold: return 214  // âmbar
+        default: return 196                   // vermelho
+        }
+    }
+
+    /// Reset compacto só pra statusline ("2h15m", "3d", "12m"): o glifo de relógio
+    /// carrega o sentido, sem a palavra localizada que a linha não tem espaço pra ter.
+    private static func compactReset(_ epoch: TimeInterval?, relativeTo now: Date) -> String? {
+        guard let epoch, epoch.isFinite, epoch > 0 else { return nil }
+        let interval = epoch - now.timeIntervalSince1970
+        guard interval > 0 else { return nil }
+        let minutes = max(1, Int(ceil(interval / 60)))
+        let days = minutes / 1440
+        let hours = (minutes % 1440) / 60
+        let remaining = minutes % 60
+        if days > 0 { return hours > 0 ? "\(days)d\(hours)h" : "\(days)d" }
+        if hours > 0 { return remaining > 0 ? "\(hours)h\(remaining)m" : "\(hours)h" }
+        return "\(remaining)m"
     }
 
     private static func statusWindow(_ label: String, _ window: UsageWindow, now: Date) -> String {
         if isExpired(window.resetsAt, relativeTo: now) {
-            return "\(label): -- (\(L10n.waitingNewWindow))"
+            return "\(label) -- \(L10n.waitingNewWindow)"
         }
-        let marker = window.usedPercentage >= warningThreshold ? " ⚠️" : ""
-        let resetSuffix = resetCountdown(window.resetsAt, relativeTo: now)
-            .map { " \(L10n.summaryResets($0))" } ?? ""
-        return "\(label): \(percentage(window.usedPercentage))%\(marker)\(resetSuffix)"
+        // Crítico (≥90%) é sinalizado pela cor vermelha do percentual, em negrito.
+        let pct = Ansi.fg(usageColor(window.usedPercentage), "\(percentage(window.usedPercentage))%", bold: true)
+        let reset = compactReset(window.resetsAt, relativeTo: now)
+            .map { " \(resetGlyph) \($0)" } ?? ""
+        return "\(label) \(pct)\(reset)"
     }
 
     /// Compact relative countdown to a reset ("in 2h 15min"), or nil when there

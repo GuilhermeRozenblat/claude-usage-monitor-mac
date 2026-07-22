@@ -35,6 +35,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        configureMainMenu()
         alertPreferences.removeLegacyKeys()
         configureStatusItem()
         configurePanel()
@@ -106,6 +107,58 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
         stateWatcher = source
     }
 
+    /// App accessory não mostra barra de menus, mas o AppKit ainda resolve os
+    /// atalhos por ela: sem isto ⌘W não fechava as janelas, ⌘, não abria os
+    /// Ajustes e ⌘C/⌘V morriam no campo de nome do save panel do export.
+    private func configureMainMenu() {
+        let main = NSMenu()
+
+        let appMenu = NSMenu()
+        let settingsItem = NSMenuItem(
+            title: L10n.settings,
+            action: #selector(showSettings),
+            keyEquivalent: ","
+        )
+        settingsItem.target = self
+        appMenu.addItem(settingsItem)
+        appMenu.addItem(.separator())
+        appMenu.addItem(NSMenuItem(
+            title: L10n.quit,
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        ))
+
+        // A barra nunca aparece (app accessory), mas o VoiceOver e as
+        // ferramentas de inspeção leem estes títulos: seguem o L10n como todo
+        // o resto.
+        let fileMenu = NSMenu(title: L10n.menuFile)
+        fileMenu.addItem(NSMenuItem(
+            title: L10n.menuClose,
+            action: #selector(NSWindow.performClose(_:)),
+            keyEquivalent: "w"
+        ))
+
+        let editMenu = NSMenu(title: L10n.menuEdit)
+        editMenu.addItem(NSMenuItem(title: L10n.menuUndo, action: Selector(("undo:")), keyEquivalent: "z"))
+        editMenu.addItem(NSMenuItem(title: L10n.menuRedo, action: Selector(("redo:")), keyEquivalent: "Z"))
+        editMenu.addItem(.separator())
+        editMenu.addItem(NSMenuItem(title: L10n.menuCut, action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: L10n.menuCopy, action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: L10n.menuPaste, action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        editMenu.addItem(NSMenuItem(
+            title: L10n.menuSelectAll,
+            action: #selector(NSText.selectAll(_:)),
+            keyEquivalent: "a"
+        ))
+
+        for submenu in [appMenu, fileMenu, editMenu] {
+            let item = NSMenuItem()
+            item.submenu = submenu
+            main.addItem(item)
+        }
+        NSApp.mainMenu = main
+    }
+
     private func configureStatusItem() {
         guard let button = statusItem.button else { return }
         button.imagePosition = .imageLeading
@@ -115,7 +168,31 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
         button.setAccessibilityLabel(L10n.claudeUsage)
         button.target = self
         button.action = #selector(togglePanel)
+        // Convenção dos status items do sistema: clique primário abre o
+        // painel, secundário abre um menu com as ações raras.
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         applyHealth(.waiting, detail: L10n.starting)
+    }
+
+    private func showStatusItemMenu(on button: NSStatusBarButton) {
+        let menu = NSMenu()
+        let entries: [(String, Selector)] = [
+            (L10n.copyUsageSummary, #selector(copyUsageSummary)),
+            (L10n.usageHistory, #selector(showHistory)),
+            (L10n.settings, #selector(showSettings)),
+        ]
+        for (title, action) in entries {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = self
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(
+            title: L10n.quit,
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        ))
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.maxY + 4), in: button)
     }
 
     private func configureShortcut() {
@@ -141,6 +218,11 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
 
     @objc private func togglePanel() {
         guard let button = statusItem.button else { return }
+        if NSApp.currentEvent?.type == .rightMouseUp {
+            panel.hide()
+            showStatusItemMenu(on: button)
+            return
+        }
         panel.toggle(relativeTo: button)
     }
 
@@ -168,6 +250,17 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
             usageSummary.isEmpty ? L10n.noUsageDataYetShort : usageSummary,
             forType: .string
         )
+        // Copiar em silêncio deixa a dúvida de se aconteceu. A linha de estado
+        // confirma por um instante e o reload seguinte a devolve ao normal.
+        guard panel.isVisible else { return }
+        panel.updatedRow.update(
+            symbol: "checkmark.circle",
+            text: L10n.summaryCopied,
+            tint: .systemGreen
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.reload()
+        }
     }
 
     private func configureNotifications() {
@@ -191,13 +284,19 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
     }
 
     private func updateNotificationsItem() {
-        let (symbol, detail): (String, String) = switch notificationAuthorization {
-        case .authorized, .provisional, .ephemeral: ("bell.fill", L10n.notificationsActive)
-        case .denied: ("bell.slash.fill", L10n.notificationsBlocked)
-        case .notDetermined: ("bell", L10n.notificationsPending)
-        @unknown default: ("questionmark.circle", L10n.notificationsUnknown)
+        // Bloqueado leva a cor de aviso, como a linha de integração: as duas
+        // linhas falam o mesmo vocabulário de estado.
+        let (symbol, detail, tint): (String, String, NSColor) = switch notificationAuthorization {
+        case .authorized, .provisional, .ephemeral:
+            ("bell.fill", L10n.notificationsActive, .secondaryLabelColor)
+        case .denied:
+            ("bell.slash.fill", L10n.notificationsBlocked, .systemOrange)
+        case .notDetermined:
+            ("bell", L10n.notificationsPending, .secondaryLabelColor)
+        @unknown default:
+            ("questionmark.circle", L10n.notificationsUnknown, .secondaryLabelColor)
         }
-        panel.notificationsRow.update(symbol: symbol, text: L10n.notifications(detail))
+        panel.notificationsRow.update(symbol: symbol, text: L10n.notifications(detail), tint: tint)
     }
 
     private func installStatusLine(showError: Bool = false) {
@@ -302,14 +401,28 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
 
     /// Relê o history.jsonl apenas quando o mtime muda (o arquivo cresce a
     /// cada ingest, não a cada reload).
+    ///
+    /// A leitura sai da main thread: são ~25 ms de decode por ingest no caso
+    /// típico, e o `load` toma o `history.lock` bloqueante — se coincidir com o
+    /// prune diário (que reescreve o arquivo inteiro segurando o mesmo lock), a
+    /// espera é de centenas de ms. O reload em curso usa o cache anterior; o
+    /// novo chega e um novo reload repinta com ele (o mtime já registrado
+    /// impede a recarga em ciclo).
     private func refreshHistoryCache(now: Date = Date()) {
         let modified = (try? FileManager.default.attributesOfItem(
             atPath: store.paths.historyFile.path
         ))?[.modificationDate] as? Date
         guard modified != historyFileModified else { return }
         historyFileModified = modified
-        cachedWeekSamples = HistoryStore(paths: store.paths)
-            .load(range: 7 * 24 * 3_600, now: now)
+        let history = HistoryStore(paths: store.paths)
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let samples = history.load(range: 7 * 24 * 3_600, now: now)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.cachedWeekSamples = samples
+                self.reload()
+            }
+        }
     }
 
     private func updateTrend(_ state: UsageState?, now: Date) {
@@ -533,6 +646,14 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
             percentage: nil,
             value: "--",
             detail: L10n.apiKeyNoLimitsDetail,
+            isAvailable: false
+        )
+        // Sem state.json também não há sessão: sem esta linha, o medidor de
+        // contexto segurava o valor da renderização anterior.
+        panel.context.update(
+            percentage: nil,
+            value: "--",
+            detail: L10n.waitingSessionData,
             isAvailable: false
         )
         panel.updatedRow.update(symbol: "key", text: L10n.apiKeyNoLimits)
@@ -950,7 +1071,30 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
 
     @objc private func reloadAction() {
         refreshClaudeAccount(force: true)
-        notifyRefreshResult(reload())
+        let result = reload()
+        // Com o painel aberto (o caso normal: o botão vive nele), o resultado
+        // já está nos medidores; uma notificação por cima é ruído, e com a
+        // permissão negada virava um alerta pedindo notificações para uma ação
+        // que já aconteceu na tela. A confirmação é inline; a notificação fica
+        // para quando o painel não está à vista.
+        if panel.isVisible {
+            flashRefreshConfirmation(result)
+        } else {
+            notifyRefreshResult(result)
+        }
+    }
+
+    private func flashRefreshConfirmation(_ result: StateLoadResult) {
+        // Erro e ausência de dados já se explicam nos próprios medidores.
+        guard case .loaded = result else { return }
+        panel.updatedRow.update(
+            symbol: "checkmark.circle",
+            text: L10n.refreshDoneTitle,
+            tint: .systemGreen
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.reload()
+        }
     }
 
     private func notifyRefreshResult(_ result: StateLoadResult) {

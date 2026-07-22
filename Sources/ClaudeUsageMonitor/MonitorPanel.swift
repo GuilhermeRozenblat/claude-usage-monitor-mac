@@ -10,6 +10,17 @@ final class MonitorPanel: NSPanel {
     override func cancelOperation(_ sender: Any?) {
         orderOut(nil)
     }
+
+    /// ⌘W também fecha. O "Close" do menu principal usa `performClose`, que
+    /// exige o botão de fechar — um painel borderless não o tem e só bipava.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+           event.charactersIgnoringModifiers == "w" {
+            orderOut(nil)
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 }
 
 /// Uma linha de estado: símbolo + texto secundário.
@@ -19,6 +30,11 @@ final class StatusRowView: NSView {
 
     init() {
         super.init(frame: .zero)
+        // Sem isto o `setAccessibilityLabel` do update é inerte: um NSView puro
+        // não é elemento de acessibilidade, e o VoiceOver lia os filhos soltos
+        // em vez da linha como um todo.
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
         iconView.symbolConfiguration = .init(pointSize: 11, weight: .regular)
         iconView.contentTintColor = .secondaryLabelColor
         iconView.setContentHuggingPriority(.required, for: .horizontal)
@@ -82,6 +98,10 @@ final class SessionDetailsView: NSView {
     init() {
         grid = NSGridView(numberOfColumns: 2, rows: 0)
         super.init(frame: .zero)
+        // Mesmo padrão das outras views compostas: a grade é um elemento e o
+        // VoiceOver lê o resumo "rótulo: valor" montado no update.
+        setAccessibilityElement(true)
+        setAccessibilityRole(.group)
 
         for label in Self.labels {
             let name = NSTextField(labelWithString: label())
@@ -158,6 +178,8 @@ final class RemedyRowView: NSView {
 
     init() {
         super.init(frame: .zero)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
         iconView.image = NSImage(
             systemSymbolName: "exclamationmark.triangle.fill",
             accessibilityDescription: nil
@@ -209,9 +231,9 @@ final class SeparatorView: NSView {
     init() {
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.separatorColor.cgColor
         translatesAutoresizingMaskIntoConstraints = false
         heightAnchor.constraint(equalToConstant: 1).isActive = true
+        applyColor()
     }
 
     @available(*, unavailable)
@@ -221,6 +243,15 @@ final class SeparatorView: NSView {
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
-        layer?.backgroundColor = NSColor.separatorColor.cgColor
+        applyColor()
+    }
+
+    /// O cgColor congela a cor no momento da resolução, e fora de
+    /// `performAsCurrentDrawingAppearance` ela resolve contra a aparência da
+    /// thread, não a da view.
+    private func applyColor() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            layer?.backgroundColor = NSColor.separatorColor.cgColor
+        }
     }
 }

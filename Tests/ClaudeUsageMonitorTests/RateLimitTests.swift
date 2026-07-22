@@ -3,6 +3,14 @@ import Foundation
 import XCTest
 @testable import ClaudeUsageMonitor
 
+/// Remove os códigos de cor ANSI da statusline pra as asserções compararem o texto visível.
+func stripANSI(_ value: String) -> String {
+    value.replacingOccurrences(of: "\u{001B}\\[[0-9;]*m", with: "", options: .regularExpression)
+}
+
+/// Símbolo Unicode de reset que a statusline usa (ver UsageFormatter).
+let resetGlyph = "↻"
+
 final class RateLimitTests: XCTestCase {
     override func setUp() {
         super.setUp()
@@ -11,12 +19,12 @@ final class RateLimitTests: XCTestCase {
 
     func testParsesAndFormatsRateLimits() throws {
         let input = Data(#"{"rate_limits":{"five_hour":{"used_percentage":33,"resets_at":1784140200},"seven_day":{"used_percentage":24,"resets_at":1784300400}}}"#.utf8)
-        let limits = try XCTUnwrap(RateLimitParser.parse(input))
+        let limits = try XCTUnwrap(StatusLineParser.parse(input)?.rateLimits)
 
         XCTAssertEqual(limits.fiveHour?.usedPercentage, 33)
         XCTAssertEqual(limits.sevenDay?.usedPercentage, 24)
         let beforeReset = Date(timeIntervalSince1970: 1_784_000_000)
-        XCTAssertTrue(UsageFormatter.statusLine(limits, relativeTo: beforeReset).contains("reinicia"))
+        XCTAssertTrue(UsageFormatter.statusLine(limits, relativeTo: beforeReset).contains(resetGlyph))
     }
 
     func testClaudeAccountUsesAuthenticatedProfileEmail() throws {
@@ -91,12 +99,12 @@ final class RateLimitTests: XCTestCase {
 
     func testRejectsInvalidPercentage() {
         let input = Data(#"{"rate_limits":{"five_hour":{"used_percentage":101}}}"#.utf8)
-        XCTAssertNil(RateLimitParser.parse(input))
+        XCTAssertNil(StatusLineParser.parse(input)?.rateLimits)
     }
 
     func testDiscardsInvalidResetTimestamp() throws {
         let input = Data(#"{"rate_limits":{"five_hour":{"used_percentage":10,"resets_at":-1}}}"#.utf8)
-        let limits = try XCTUnwrap(RateLimitParser.parse(input))
+        let limits = try XCTUnwrap(StatusLineParser.parse(input)?.rateLimits)
         XCTAssertNil(limits.fiveHour?.resetsAt)
     }
 
@@ -126,7 +134,7 @@ final class RateLimitTests: XCTestCase {
             limits,
             relativeTo: Date(timeIntervalSince1970: 1_700_000_001)
         )
-        XCTAssertEqual(output, "Claude 5h: -- (aguardando nova janela)")
+        XCTAssertEqual(stripANSI(output), "5h -- aguardando nova janela")
     }
 
     func testStateRoundTrip() throws {
@@ -242,7 +250,7 @@ final class RateLimitTests: XCTestCase {
     func testAcceptsWeeklyWindowWithoutFiveHourWindow() throws {
         let paths = try temporaryPaths()
         let input = Data(#"{"rate_limits":{"seven_day":{"used_percentage":44,"resets_at":1900000000}}}"#.utf8)
-        let limits = try XCTUnwrap(RateLimitParser.parse(input))
+        let limits = try XCTUnwrap(StatusLineParser.parse(input)?.rateLimits)
         XCTAssertNil(limits.fiveHour)
         XCTAssertEqual(limits.sevenDay?.usedPercentage, 44)
 
@@ -274,14 +282,14 @@ final class RateLimitTests: XCTestCase {
             notifiedThresholds: [25],
             usageUpdatedAt: "2026-07-15T19:00:00Z"
         )
-        let output = UsageFormatter.statusLine(nil, fallback: state, relativeTo: now)
-        XCTAssertTrue(output.contains("Claude 5h: 41%"), output)
-        XCTAssertTrue(output.contains("7d: 28%"), output)
-        XCTAssertTrue(output.contains("reinicia"), output)
+        let output = stripANSI(UsageFormatter.statusLine(nil, fallback: state, relativeTo: now))
+        XCTAssertTrue(output.contains("5h 41%"), output)
+        XCTAssertTrue(output.contains("7d 28%"), output)
+        XCTAssertTrue(output.contains(resetGlyph), output)
     }
 
     func testStatusLineWithoutLimitsOrFallbackShowsPlaceholder() {
-        XCTAssertEqual(UsageFormatter.statusLine(nil), "Claude 5h: --")
+        XCTAssertEqual(stripANSI(UsageFormatter.statusLine(nil)), "5h --")
     }
 
     func testStatusLineMarksCriticalUsage() {
@@ -290,9 +298,22 @@ final class RateLimitTests: XCTestCase {
             fiveHour: UsageWindow(usedPercentage: 95, resetsAt: 1_784_140_200),
             sevenDay: nil
         )
-        let output = UsageFormatter.statusLine(limits, relativeTo: now)
+        let output = stripANSI(UsageFormatter.statusLine(limits, relativeTo: now))
         XCTAssertTrue(output.contains("95%"), output)
-        XCTAssertTrue(output.contains("⚠️"), output)
+        // Crítico é sinalizado pela cor vermelha; o mapa de faixas é o que garante isso.
+        XCTAssertEqual(UsageFormatter.usageColor(95), 196)   // vermelho
+        XCTAssertEqual(UsageFormatter.usageColor(75), 214)   // âmbar
+        XCTAssertEqual(UsageFormatter.usageColor(20), 34)    // verde
+    }
+
+    func testStatusLineShowsModelAndReasoning() throws {
+        let paths = try temporaryPaths()
+        let input = Data(#"{"rate_limits":{"five_hour":{"used_percentage":10,"resets_at":1900000000}},"model":{"display_name":"Opus 4.8"},"effort":{"level":"high"}}"#.utf8)
+
+        let output = stripANSI(try StatusLineProcessor.run(input: input, store: StateStore(paths: paths)))
+        XCTAssertTrue(output.contains("Opus 4.8"), output)
+        XCTAssertTrue(output.contains("high"), output)
+        XCTAssertTrue(output.contains("5h 10%"), output)
     }
 
     func testPercentageStripsFloatingPointNoise() {
@@ -310,8 +331,8 @@ final class RateLimitTests: XCTestCase {
         _ = try StatusLineProcessor.run(input: withLimits, store: store)
         let output = try StatusLineProcessor.run(input: withoutLimits, store: store)
 
-        XCTAssertTrue(output.contains("Claude 5h: 20%"), output)
-        XCTAssertTrue(output.contains("7d: 40%"), output)
+        XCTAssertTrue(stripANSI(output).contains("5h 20%"), output)
+        XCTAssertTrue(stripANSI(output).contains("7d 40%"), output)
     }
 
     func testMigratesLegacyStateKeys() throws {
@@ -346,7 +367,7 @@ final class RateLimitTests: XCTestCase {
 
         let executable = "/Applications/Claude Usage Monitor.app/Contents/MacOS/ClaudeUsageMonitor"
         try SettingsManager.install(executablePath: executable, paths: paths)
-        XCTAssertTrue(try SettingsManager.isInstalled(executablePath: executable, paths: paths))
+        XCTAssertEqual(try SettingsManager.integrationStatus(executablePath: executable, paths: paths), .active)
 
         try SettingsManager.uninstall(executablePath: executable, paths: paths)
         let restored = try readJSON(paths.claudeSettingsFile)
@@ -364,7 +385,7 @@ final class RateLimitTests: XCTestCase {
             to: paths.claudeSettingsFile
         )
 
-        XCTAssertFalse(try SettingsManager.isInstalled(executablePath: executable, paths: paths))
+        XCTAssertNotEqual(try SettingsManager.integrationStatus(executablePath: executable, paths: paths), .active)
         XCTAssertEqual(
             try SettingsManager.integrationStatus(executablePath: executable, paths: paths),
             .misconfigured
@@ -373,7 +394,7 @@ final class RateLimitTests: XCTestCase {
         try SettingsManager.install(executablePath: executable, paths: paths)
         let repaired = try readJSON(paths.claudeSettingsFile)["statusLine"] as? [String: Any]
         XCTAssertEqual(repaired?["type"] as? String, "command")
-        XCTAssertTrue(try SettingsManager.isInstalled(executablePath: executable, paths: paths))
+        XCTAssertEqual(try SettingsManager.integrationStatus(executablePath: executable, paths: paths), .active)
     }
 
     func testUninstallPreservesStatusLineChangedByUser() throws {
@@ -404,7 +425,7 @@ final class RateLimitTests: XCTestCase {
         let input = Data(#"{"rate_limits":{"five_hour":{"used_percentage":10}}}"#.utf8)
 
         let output = try StatusLineProcessor.run(input: input, store: StateStore(paths: paths))
-        XCTAssertEqual(output, "Claude 5h: 10%")
+        XCTAssertEqual(stripANSI(output), "5h 10%")
     }
 
     func testSettingsMigrationRecognizesLegacyMonitor() {

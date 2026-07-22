@@ -19,6 +19,11 @@ private final class ChartLegendSwatch: NSView {
         color.setFill()
         NSBezierPath(roundedRect: bounds, xRadius: 1.5, yRadius: 1.5).fill()
     }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
 }
 
 /// Para onde foi o consumo do período, repartido por modelo.
@@ -331,6 +336,9 @@ final class HistoryWindowController: NSWindowController {
         window.minSize = NSSize(width: 520, height: 320)
         window.isReleasedWhenClosed = false
         window.center()
+        // Depois do center(): com um frame salvo, a restauração vence; sem
+        // ele, a primeira abertura fica centrada.
+        window.setFrameAutosaveName("history")
         super.init(window: window)
         buildContent()
     }
@@ -377,6 +385,14 @@ final class HistoryWindowController: NSWindowController {
             rangeControl.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
             legend.centerYAnchor.constraint(equalTo: rangeControl.centerYAnchor),
             legend.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
+            // Sem esta relação, o seletor e a legenda eram presos cada um à sua
+            // borda e atropelavam-se na largura mínima (os cinco segmentos em
+            // PT passam dos 350 pt). A legenda cede primeiro: os rótulos
+            // truncam com o texto completo no tooltip.
+            legend.leadingAnchor.constraint(
+                greaterThanOrEqualTo: rangeControl.trailingAnchor,
+                constant: 12
+            ),
             chart.topAnchor.constraint(equalTo: rangeControl.bottomAnchor, constant: 10),
             chart.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
             chart.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
@@ -395,8 +411,20 @@ final class HistoryWindowController: NSWindowController {
         ])
     }
 
+    /// A carga de retenção cheia é o pior caso medido do HistoryStore (~270 ms
+    /// com 90 dias): fora da main thread, senão o clique do botão vira
+    /// beach-ball antes mesmo do save panel aparecer.
     @objc private func exportHistory() {
-        let samples = store.load(range: HistoryStore.retention)
+        let store = self.store
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let samples = store.load(range: HistoryStore.retention)
+            DispatchQueue.main.async {
+                self?.presentExport(samples)
+            }
+        }
+    }
+
+    private func presentExport(_ samples: [HistorySample]) {
         guard !samples.isEmpty else {
             let alert = NSAlert()
             alert.messageText = L10n.nothingToExport
@@ -415,24 +443,29 @@ final class HistoryWindowController: NSWindowController {
         guard let window else { return }
         panel.beginSheetModal(for: window) { response in
             guard response == .OK, let url = panel.url else { return }
-            let formatter = ISO8601DateFormatter()
-            var csv = "timestamp,five_hour_pct,seven_day_pct,session_cost_usd\n"
-            csv.reserveCapacity(samples.count * 64)
-            for sample in samples {
-                csv.append([
-                    formatter.string(from: sample.date),
-                    sample.h5.map { String($0) } ?? "",
-                    sample.d7.map { String($0) } ?? "",
-                    sample.c.map { String($0) } ?? "",
-                ].joined(separator: ","))
-                csv.append("\n")
-            }
-            do {
-                try Data(csv.utf8).write(to: url, options: .atomic)
-            } catch {
-                let alert = NSAlert(error: error)
-                alert.messageText = L10n.couldNotExportHistory
-                alert.beginSheetModal(for: window)
+            // ~130 mil linhas na retenção cheia: gera e grava fora da main.
+            DispatchQueue.global(qos: .userInitiated).async {
+                let formatter = ISO8601DateFormatter()
+                var csv = "timestamp,five_hour_pct,seven_day_pct,session_cost_usd\n"
+                csv.reserveCapacity(samples.count * 64)
+                for sample in samples {
+                    csv.append([
+                        formatter.string(from: sample.date),
+                        sample.h5.map { String($0) } ?? "",
+                        sample.d7.map { String($0) } ?? "",
+                        sample.c.map { String($0) } ?? "",
+                    ].joined(separator: ","))
+                    csv.append("\n")
+                }
+                do {
+                    try Data(csv.utf8).write(to: url, options: .atomic)
+                } catch {
+                    DispatchQueue.main.async {
+                        let alert = NSAlert(error: error)
+                        alert.messageText = L10n.couldNotExportHistory
+                        alert.beginSheetModal(for: window)
+                    }
+                }
             }
         }
     }
@@ -446,6 +479,9 @@ final class HistoryWindowController: NSWindowController {
         let text = NSTextField(labelWithString: label)
         text.font = .systemFont(ofSize: 11)
         text.textColor = .secondaryLabelColor
+        text.lineBreakMode = .byTruncatingTail
+        text.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        text.toolTip = label
 
         let row = NSStackView(views: [swatch, text])
         row.orientation = .horizontal
@@ -465,11 +501,52 @@ final class HistoryWindowController: NSWindowController {
     func refreshIfVisible(fiveHourResetAt: TimeInterval? = nil) {
         self.fiveHourResetAt = fiveHourResetAt
         guard window?.isVisible == true else { return }
-        refresh()
+        // Este é o caminho quente: dispara a cada ingest e a cada tick de 30 s
+        // enquanto a janela está aberta. Em 90 dias a leitura completa custa
+        // ~270 ms (ver HistoryStore.load), então ela sai da main thread; o
+        // contador descarta respostas fora de ordem e as que chegarem depois de
+        // um refresh síncrono mais novo (abrir a janela, trocar o range).
+        refreshGeneration += 1
+        let generation = refreshGeneration
+        let now = Date()
+        let range = self.range
+        let resetAt = self.fiveHourResetAt
+        let store = self.store
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let data = Self.loadChartData(store: store, range: range, resetAt: resetAt, now: now)
+            DispatchQueue.main.async {
+                guard let self, generation == self.refreshGeneration else { return }
+                self.apply(data, now: now)
+            }
+        }
     }
 
+    /// Síncrono de propósito: só corre em ação direta do usuário (abrir a
+    /// janela, trocar o range), onde uma primeira pintura vazia piscaria.
     private func refresh(now: Date = Date()) {
-        let span = ChartSpan.resolve(range: range, resetAt: fiveHourResetAt, now: now)
+        refreshGeneration += 1
+        apply(
+            Self.loadChartData(store: store, range: range, resetAt: fiveHourResetAt, now: now),
+            now: now
+        )
+    }
+
+    private struct ChartData {
+        let samples: [HistorySample]
+        let split: [ModelUsage.Share]
+        let span: ChartSpan
+        let range: HistoryRange
+    }
+
+    private var refreshGeneration = 0
+
+    private static func loadChartData(
+        store: HistoryStore,
+        range: HistoryRange,
+        resetAt: TimeInterval?,
+        now: Date
+    ) -> ChartData {
+        let span = ChartSpan.resolve(range: range, resetAt: resetAt, now: now)
         // Recortado ao eixo, e não só carregado: o intervalo de carga cobre a
         // janela de 5 h mas começa antes dela (a carga vai de `agora − 5h` e a
         // janela começa em `reset − 5h`, que é depois). As amostras nesse
@@ -479,16 +556,24 @@ final class HistoryWindowController: NSWindowController {
         // fosse o da janela em curso, que ia em 20%.
         let raw = store.load(range: range.seconds, now: now)
             .filter { $0.t >= span.start && $0.t <= span.end }
-        let samples = HistoryStore.downsample(raw, limit: 500)
-        chart.show(samples: samples, range: range, span: span, now: now)
         // A repartição sai das amostras cruas: o downsample fica com o pico de
         // cada balde e descarta os degraus de onde a atribuição por modelo vem.
-        modelSplit.show(ModelUsage.split(raw))
+        return ChartData(
+            samples: HistoryStore.downsample(raw, limit: 500),
+            split: ModelUsage.split(raw),
+            span: span,
+            range: range
+        )
+    }
+
+    private func apply(_ data: ChartData, now: Date) {
+        chart.show(samples: data.samples, range: data.range, span: data.span, now: now)
+        modelSplit.show(data.split)
 
         // O limite semanal não existe em todo plano, e cada janela pode faltar
         // por si só. A legenda e o rodapé seguem o que o payload de facto traz.
-        let peak5 = samples.compactMap(\.h5).max()
-        let peak7 = samples.compactMap(\.d7).max()
+        let peak5 = data.samples.compactMap(\.h5).max()
+        let peak7 = data.samples.compactMap(\.d7).max()
         sevenDayLegend.isHidden = peak7 == nil
 
         var parts: [String] = []
@@ -750,7 +835,7 @@ final class HistoryChartView: NSView {
 
     private func drawHover(in plot: NSRect) {
         guard let hoverLocation, plot.insetBy(dx: -8, dy: -8).contains(hoverLocation),
-              !samples.isEmpty else { return }
+              !samples.isEmpty, plot.width > 0 else { return }
 
         let (start, end) = (span.start, span.end)
         let t = start + (end - start) * Double((hoverLocation.x - plot.minX) / plot.width)

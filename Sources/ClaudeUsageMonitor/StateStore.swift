@@ -72,13 +72,18 @@ struct StateStore {
     /// permissão), que é o caso em que o utilizador precisa mesmo de saber.
     @discardableResult
     func discardUnreadableState() -> Bool {
-        guard case .invalid = loadResult() else { return false }
-        do {
-            try FileManager.default.removeItem(at: paths.stateFile)
-            return true
-        } catch {
-            return false
+        // Sob o lock do state: entre o check e o remove, um ingest pode gravar
+        // um state.json válido que seria apagado sem motivo.
+        let removed = try? withExclusiveAccess { () -> Bool in
+            guard case .invalid = loadResult() else { return false }
+            do {
+                try FileManager.default.removeItem(at: paths.stateFile)
+                return true
+            } catch {
+                return false
+            }
         }
+        return removed ?? false
     }
 
     func save(_ state: UsageState) throws {

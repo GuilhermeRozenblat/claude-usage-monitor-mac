@@ -107,8 +107,20 @@ enum L10n {
     static var usageHistory: String { pick("Usage history…", "Histórico de uso…", "Historial de uso…") }
     static var reconfigureClaudeCode: String { pick("Reconfigure Claude Code", "Reconfigurar Claude Code", "Reconfigurar Claude Code") }
     static var openDataFolder: String { pick("Open data folder", "Abrir pasta de dados", "Abrir carpeta de datos") }
-    static var languageMenuTitle: String { pick("Language", "Idioma", "Idioma") }
     static var automaticLanguage: String { pick("Automatic (System)", "Automático (Sistema)", "Automático (Sistema)") }
+    static var summaryCopied: String { pick("Summary copied", "Resumo copiado", "Resumen copiado") }
+
+    // MARK: Menu principal (invisível num app accessory, mas o VoiceOver lê)
+
+    static var menuFile: String { pick("File", "Arquivo", "Archivo") }
+    static var menuClose: String { pick("Close", "Fechar", "Cerrar") }
+    static var menuEdit: String { pick("Edit", "Editar", "Edición") }
+    static var menuUndo: String { pick("Undo", "Desfazer", "Deshacer") }
+    static var menuRedo: String { pick("Redo", "Refazer", "Rehacer") }
+    static var menuCut: String { pick("Cut", "Recortar", "Cortar") }
+    static var menuCopy: String { pick("Copy", "Copiar", "Copiar") }
+    static var menuPaste: String { pick("Paste", "Colar", "Pegar") }
+    static var menuSelectAll: String { pick("Select All", "Selecionar Tudo", "Seleccionar todo") }
     static var about: String { pick("About", "Sobre", "Acerca de") }
     static var quit: String { pick("Quit", "Encerrar", "Salir") }
     static var settings: String { pick("Settings", "Ajustes", "Ajustes") }

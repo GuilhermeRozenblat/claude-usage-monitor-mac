@@ -356,15 +356,34 @@ final class MonitorPanelController {
     @objc private func toggleDetails() {
         let showing = disclosure.state == .on
         updateDisclosureImage()
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.18
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            sessionDetails.animator().isHidden = !showing
-        } completionHandler: { [weak self] in
-            guard let self else { return }
-            self.resize()
-            if let statusButton = self.statusButton {
-                self.position(relativeTo: statusButton)
+        let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.18
+        if showing {
+            // A janela cresce antes do conteúdo aparecer: revelar dentro de
+            // uma janela ainda curta espremia as linhas durante a animação, e
+            // só no fim a altura saltava para o lugar.
+            sessionDetails.isHidden = false
+            sessionDetails.alphaValue = 0
+            resize()
+            if let statusButton {
+                position(relativeTo: statusButton)
+            }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = duration
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                sessionDetails.animator().alphaValue = 1
+            }
+        } else {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = duration
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                sessionDetails.animator().isHidden = true
+            } completionHandler: { [weak self] in
+                guard let self else { return }
+                self.sessionDetails.alphaValue = 1
+                self.resize()
+                if let statusButton = self.statusButton {
+                    self.position(relativeTo: statusButton)
+                }
             }
         }
     }

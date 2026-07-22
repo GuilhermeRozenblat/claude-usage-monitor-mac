@@ -207,7 +207,7 @@ final class UsageAlertsTests: XCTestCase {
         let state = try XCTUnwrap(store.load())
         XCTAssertNotNil(state.lastIngestErrorAt)
         XCTAssertEqual(state.fiveHourUsage, 40)
-        XCTAssertTrue(output.contains("Claude 5h: 40%"), output)
+        XCTAssertTrue(stripANSI(output).contains("5h 40%"), output)
     }
 
     func testSuccessfulSessionPayloadClearsPreviousIngestError() throws {

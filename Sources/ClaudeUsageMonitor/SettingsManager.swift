@@ -50,13 +50,6 @@ enum SettingsManager {
         try writeObject(settings, to: paths.claudeSettingsFile)
     }
 
-    static func isInstalled(executablePath: String, paths: AppPaths = .current) throws -> Bool {
-        let settings = try readObject(paths.claudeSettingsFile)
-        let statusLine = settings?["statusLine"] as? [String: Any]
-        return statusLine?["type"] as? String == "command" &&
-            statusLine?["command"] as? String == desiredCommand(executablePath: executablePath)
-    }
-
     static func integrationStatus(
         executablePath: String,
         paths: AppPaths = .current

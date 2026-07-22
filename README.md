@@ -77,16 +77,14 @@ Não use `sudo`. O comando confirma que a pasta pertence ao usuário atual,
 remove a quarentena apenas do projeto e preserva as proteções do restante do
 sistema.
 
-### Instalar o app compilado
+### Instalar um release pronto
 
-O bundle está em:
-
-```text
-dist/Claude Usage Monitor.app
-```
-
-Mova o app para `~/Applications` e abra-o. Se o macOS bloquear a primeira
-execução, clique com o botão direito no app e escolha **Abrir**.
+Baixe o `ClaudeUsageMonitor-<versão>.zip` da página de
+[Releases](https://github.com/GuilhermeRozenblat/claude-usage-monitor-mac/releases),
+descompacte e mova o `Claude Usage Monitor.app` para `~/Applications`. Se o
+macOS bloquear a primeira execução, clique com o botão direito no app e
+escolha **Abrir**. (Quem compila do código gera o mesmo bundle em
+`dist/Claude Usage Monitor.app` via `./build-app.command`.)
 
 ### Compilar e instalar
 
@@ -139,13 +137,24 @@ Clique no item para ver:
   e 90 dias (coletado localmente pela própria ingestão), e a repartição do
   consumo do período por modelo;
 - botões para atualizar a exibição, abrir o histórico e abrir o **Sobre**;
-- **Ajustes** (⌘,) com duas abas: **Geral** (início de sessão, idioma,
-  integração, dados) e **Alertas** (tipos de alerta, marcos e pausa de 1 hora);
+- **Ajustes** (⌘,) com duas abas: **Geral** (início de sessão, idioma, atalho
+  global, integração, dados) e **Alertas** (tipos de alerta, marcos e pausa de
+  1 hora);
 - menu **•••** com copiar o resumo de uso, reconfigurar a integração, abrir a
   pasta de dados e encerrar.
 
 A aba **Geral** dos Ajustes abre com a identidade do app: ícone, versão e
 autoria.
+
+O painel é ancorado à barra no estilo dos extras do próprio macOS (Wi-Fi, Som,
+Central de Controlo), com Liquid Glass no macOS 26 e recuo para o vidro clássico
+nas versões anteriores.
+
+Para abrir o painel sem clicar no ícone, ative **Ajustes > Geral > Atalho
+global** (⌥⌘U). Vem desligado por padrão — um atalho global tira a combinação de
+todos os outros apps — e usa `RegisterEventHotKey`, a API nativa que não exige
+permissão de Acessibilidade. Se outro app já usar a combinação, a caixa avisa e
+não fica marcada.
 
 Na primeira execução, permita as notificações do macOS. O app avisa nos marcos
 de 25%, 50%, 75%, 90% e 100% do limite de 5 horas e de 75%, 90% e 100% do
@@ -281,7 +290,8 @@ Documentação complementar:
 
 - [Guia do usuário](docs/USER_GUIDE.md)
 - [Arquitetura](docs/ARCHITECTURE.md)
-- [Desenvolvimento e release](docs/DEVELOPMENT.md)
+- [Desenvolvimento](docs/DEVELOPMENT.md)
+- [Release: assinatura, notarização e publicação](docs/RELEASE.md)
 - [Segurança](SECURITY.md)
 - [Histórico de mudanças](CHANGELOG.md)
 
@@ -304,3 +314,7 @@ Configuração integrada:
 ```text
 ~/.claude/settings.json
 ```
+
+## Licença
+
+[MIT](LICENSE).

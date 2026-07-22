@@ -18,3 +18,7 @@ xcuserdata/
 # Estado local de ferramentas
 .impeccable/
 .claude/settings.local.json
+
+# Documentos internos — planejamento e estratégia, não vão a público
+docs/COMPETITORS.md
+docs/ROADMAP.md

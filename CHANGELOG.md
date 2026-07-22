@@ -1,6 +1,6 @@
 # Histórico de mudanças
 
-## 3.6.0 - 2026-07-17
+## 3.6.0 - 2026-07-22
 
 ### Interface
 
@@ -29,6 +29,18 @@
 - o Sobre anima a entrada: cada bloco sobe 8 pt e aparece, 45 ms depois do
   anterior. O halo pulsante saiu: com o anel a girar eram dois movimentos
   contínuos a disputar o mesmo ícone.
+
+### Status line do terminal
+
+- a linha impressa no Claude Code ganha cor: o percentual de cada janela vira
+  verde, âmbar ou vermelho conforme a faixa de uso (limiar crítico em 90%), em
+  negrito, para ler o risco num relance sem contar dígitos;
+- passa a mostrar o **modelo** e o **esforço de raciocínio** da sessão daquele
+  terminal (ex.: `Fable 5 (high)`), lidos dos campos oficiais da status line;
+- o tempo até o reset fica compacto (`↻ 4h27m`) com um símbolo Unicode padrão,
+  que renderiza em qualquer fonte de terminal, sem depender de Nerd Fonts;
+- a cor respeita as convenções `NO_COLOR` e `TERM=dumb`: em pipe ou terminal
+  sem cor, a linha sai em texto limpo.
 
 ### Funcionalidades
 
@@ -167,6 +179,31 @@ corrigido e coberto por teste depois:
   nome de diretório com sequências de escape chegava inteiro ao terminal pelo
   `--show`.
 
+### Auditoria de release
+
+- painel responde a **⌘W** e o ícone da barra ganha menu de **clique-direito**
+  (copiar resumo, histórico, ajustes, encerrar), as duas convenções dos extras
+  do sistema;
+- a janela de Histórico lembra posição e tamanho entre execuções, e o seletor
+  de período deixa de atropelar a legenda na largura mínima (a legenda trunca
+  com tooltip);
+- toda leitura do histórico sai da thread principal (refresh periódico da
+  janela aberta, export CSV e cache de 7 dias): com 90 dias de retenção a
+  decodificação custava ~270 ms por ciclo na UI;
+- **Copiar resumo de uso** e **Atualizar exibição** confirmam inline na linha
+  de estado; o refresh manual só notifica quando o painel não está à vista, e
+  deixa de pedir permissão de notificação para uma ação já visível na tela;
+- VoiceOver: medidores, cabeçalho, tendência, linhas de estado e grade da
+  sessão viram elementos de acessibilidade reais (antes os rótulos montados
+  eram ignorados e os campos lidos soltos);
+- detalhe truncado dos medidores ganha tooltip com o texto completo; menu
+  principal (invisível, mas lido pelo VoiceOver) localizado nos três idiomas;
+- remove código morto (`RateLimitParser`, `SettingsManager.isInstalled`,
+  `L10n.languageMenuTitle`) apontando os testes para os caminhos reais;
+- adiciona LICENSE (MIT), categoria do app no Info.plist
+  (`public.app-category.developer-tools`) e `docs/RELEASE.md` com o processo
+  completo de assinatura, notarização e publicação.
+
 ### Correções
 
 - os formatos de hora deixam de fixar 24 horas em todos os idiomas: o relógio
@@ -189,7 +226,7 @@ corrigido e coberto por teste depois:
 - reforça o release universal com validação das duas arquiteturas, hardened
   runtime também no build local, ticket notarizado, `stapler validate` e
   avaliação final do Gatekeeper;
-- amplia a suíte para 144 testes.
+- amplia a suíte para 145 testes.
 
 ## 3.5.0 - 2026-07-16
 

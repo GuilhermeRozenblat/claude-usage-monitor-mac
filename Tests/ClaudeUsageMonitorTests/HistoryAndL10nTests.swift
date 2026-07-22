@@ -86,7 +86,7 @@ final class HistoryAndL10nTests: XCTestCase {
         defer { L10n.language = previous }
 
         XCTAssertEqual(L10n.fiveHourMeterTitle, "Límite de 5 horas")
-        XCTAssertEqual(L10n.languageMenuTitle, "Idioma")
+        XCTAssertEqual(L10n.summaryCopied, "Resumen copiado")
         XCTAssertEqual(L10n.madeInBrazil, "Hecho en Brasil")
         XCTAssertEqual(L10n.effortLevel("xhigh"), "muy alto")
         XCTAssertEqual(UsageFormatter.elapsedTime(120), "hace 2min")
@@ -140,7 +140,7 @@ final class HistoryAndL10nTests: XCTestCase {
             ),
             relativeTo: now
         )
-        XCTAssertTrue(output.contains("reinicia em 1h"), output)
+        XCTAssertTrue(stripANSI(output).contains("\(resetGlyph) 1h"), output)
     }
 
     // MARK: - HistoryStore
