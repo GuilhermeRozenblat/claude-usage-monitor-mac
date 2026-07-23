@@ -223,6 +223,10 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
             showStatusItemMenu(on: button)
             return
         }
+        // Reconsulta a permissão do sistema ao abrir: o utilizador pode tê-la
+        // mudado nos Ajustes com o app já a correr, e a linha só era atualizada
+        // no arranque.
+        refreshNotificationStatus()
         panel.toggle(relativeTo: button)
     }
 
@@ -267,6 +271,16 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
         let center = UNUserNotificationCenter.current()
         center.delegate = self
         center.requestAuthorization(options: [.alert, .sound]) { [weak self] _, _ in
+            self?.refreshNotificationStatus()
+        }
+        // Voltar ao app (ex.: depois de mexer nos Ajustes do Sistema) reconsulta
+        // a permissão, para o ícone da barra de menus não ficar preso no estado
+        // do arranque mesmo com o painel fechado.
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
             self?.refreshNotificationStatus()
         }
         refreshNotificationStatus()
