@@ -874,6 +874,12 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
         if !usageSummary.isEmpty {
             toolTip += "\n\(usageSummary)"
         }
+        // Alertas silenciados só apareciam nos Ajustes: sem isto, o utilizador
+        // esquece que os pausou e estranha o silêncio. O tooltip do ícone é o
+        // sítio que ele já olha para perceber o estado.
+        if alertPreferences.isSnoozed(), let until = alertPreferences.snoozeUntil {
+            toolTip += "\n\(L10n.snoozedUntil(UsageFormatter.clockTime(until)))"
+        }
         button.toolTip = toolTip
         button.setAccessibilityLabel("Claude Usage Monitor, \(health.title), \(button.title)")
     }

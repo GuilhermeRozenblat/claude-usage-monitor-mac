@@ -448,6 +448,25 @@ enum UsageFormatter {
     /// Usage percentage at/above which the window is highlighted as critical.
     static let warningThreshold = 90.0
 
+    /// `ISO8601DateFormatter` é dos tipos mais caros do Foundation para alocar,
+    /// e `isoDate` é chamado várias vezes por `reload` (a cada 30 s e a cada
+    /// evento do watcher). É imutável na configuração usada e thread-safe, por
+    /// isso uma instância partilhada serve todas as chamadas.
+    private static let isoFormatter = ISO8601DateFormatter()
+
+    /// `DateFormatter` também é caro de alocar. `locale`/`dateFormat` mudam entre
+    /// métodos e quando o utilizador troca de idioma, por isso a instância é
+    /// reconfigurada a cada chamada — ainda muito mais barato que alocar uma
+    /// nova. Todos os chamadores (render) correm na main thread; mutar aqui é
+    /// seguro. Ver `MenuBarApp.render`.
+    private static let localizedFormatter = DateFormatter()
+
+    private static func format(_ date: Date, _ pattern: String) -> String {
+        localizedFormatter.locale = L10n.locale
+        localizedFormatter.dateFormat = pattern
+        return localizedFormatter.string(from: date)
+    }
+
     static func percentage(_ value: Double) -> String {
         // Round to one decimal first so floating-point noise (e.g. 28.000000000000004,
         // which JSON decoding routinely produces) renders as "28" instead of "28.0".
@@ -480,10 +499,7 @@ enum UsageFormatter {
 
     static func reset(_ epochSeconds: TimeInterval?) -> String? {
         guard let epochSeconds, epochSeconds.isFinite, epochSeconds > 0 else { return nil }
-        let formatter = DateFormatter()
-        formatter.locale = L10n.locale
-        formatter.dateFormat = L10n.shortDateTimeFormat
-        return formatter.string(from: Date(timeIntervalSince1970: epochSeconds))
+        return format(Date(timeIntervalSince1970: epochSeconds), L10n.shortDateTimeFormat)
     }
 
     static func resetDescription(
@@ -492,10 +508,7 @@ enum UsageFormatter {
     ) -> String? {
         guard let epochSeconds, epochSeconds.isFinite, epochSeconds > 0 else { return nil }
         let resetDate = Date(timeIntervalSince1970: epochSeconds)
-        let formatter = DateFormatter()
-        formatter.locale = L10n.locale
-        formatter.dateFormat = L10n.fullDateTimeFormat
-        let absolute = formatter.string(from: resetDate)
+        let absolute = format(resetDate, L10n.fullDateTimeFormat)
         let interval = resetDate.timeIntervalSince(now)
 
         guard interval > 0 else { return absolute }
@@ -506,15 +519,17 @@ enum UsageFormatter {
         guard let date = isoDate(value) else {
             return L10n.awaitingData
         }
-        let formatter = DateFormatter()
-        formatter.locale = L10n.locale
-        formatter.dateFormat = L10n.updatedTimeFormat
-        return "\(formatter.string(from: date)) (\(elapsedTime(now.timeIntervalSince(date))))"
+        return "\(format(date, L10n.updatedTimeFormat)) (\(elapsedTime(now.timeIntervalSince(date))))"
     }
 
     static func isoDate(_ value: String?) -> Date? {
         guard let value else { return nil }
-        return ISO8601DateFormatter().date(from: value)
+        return isoFormatter.date(from: value)
+    }
+
+    /// Hora do relógio localizada (ex.: "14:30"), para o fim do snooze.
+    static func clockTime(_ date: Date) -> String {
+        format(date, L10n.clockFormat)
     }
 
     /// Idade do dado em segundos, ou nil quando o timestamp é ausente/inválido.
