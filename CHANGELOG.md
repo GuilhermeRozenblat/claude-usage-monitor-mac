@@ -1,5 +1,27 @@
 # Changelog
 
+## 3.6.2 - 2026-07-23
+
+### Notifications
+
+- the panel's notification row now also reflects the permission being turned
+  **off** in System Settings while the app is running. The panel is a
+  nonactivating panel, so opening it never activated the app and macOS kept the
+  permission snapshot pinned to the last active state; the app now activates on
+  open so the snapshot refreshes.
+
+### Interface
+
+- snoozed alerts show in the menu bar icon's tooltip ("Snoozed until HH:MM"), so
+  a paused state is visible without opening Settings.
+
+### Performance
+
+- the date formatters in the usage formatter are shared instead of allocated on
+  every call. `ISO8601DateFormatter` and `DateFormatter` are among the more
+  expensive Foundation types to create, and they were rebuilt several times per
+  refresh.
+
 ## 3.6.1 - 2026-07-23
 
 ### Notifications
