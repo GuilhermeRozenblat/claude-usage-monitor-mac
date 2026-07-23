@@ -206,9 +206,8 @@ covered by a test afterward:
   (invisible, but read by VoiceOver) is localized in all three languages;
 - removes dead code (`RateLimitParser`, `SettingsManager.isInstalled`,
   `L10n.languageMenuTitle`), pointing the tests at the real paths;
-- adds LICENSE (MIT), the app category in Info.plist
-  (`public.app-category.developer-tools`), and `docs/RELEASE.md` with the full
-  signing, notarization, and publishing process.
+- adds LICENSE (MIT) and the app category in Info.plist
+  (`public.app-category.developer-tools`).
 
 ### Fixes
 

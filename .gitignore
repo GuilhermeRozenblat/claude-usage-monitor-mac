@@ -19,6 +19,9 @@ xcuserdata/
 .impeccable/
 .claude/settings.local.json
 
-# Documentos internos — planejamento e estratégia, não vão a público
+# Documentos internos — planejamento, estratégia, ops e detalhes técnicos; não vão a público
 docs/COMPETITORS.md
 docs/ROADMAP.md
+docs/RELEASE.md
+docs/ARCHITECTURE.md
+docs/DEVELOPMENT.md

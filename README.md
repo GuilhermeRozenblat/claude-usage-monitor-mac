@@ -48,7 +48,18 @@ has the details.
 
 ## Installation
 
-### Prebuilt release (recommended)
+### Homebrew (recommended)
+
+```sh
+brew tap guilhermerozenblat/tap
+brew trust guilhermerozenblat/tap
+brew install --cask guilhermerozenblat/tap/claude-usage-monitor
+```
+
+Homebrew 6.0 and later require a one-time `brew trust` for any third-party tap;
+that is the middle line. `brew upgrade` picks up new versions.
+
+### Prebuilt release
 
 Download `ClaudeUsageMonitor-<version>.zip` from
 [Releases](https://github.com/GuilhermeRozenblat/claude-usage-monitor-mac/releases),
@@ -190,9 +201,8 @@ SWIFTPM_MODULECACHE_OVERRIDE="$PWD/.build/ModuleCache" \
 swift test --disable-sandbox
 ```
 
-More docs: [User guide](docs/USER_GUIDE.md) · [Architecture](docs/ARCHITECTURE.md)
-· [Development](docs/DEVELOPMENT.md) · [Release](docs/RELEASE.md) ·
-[Security](SECURITY.md) · [Changelog](CHANGELOG.md).
+More docs: [User guide](docs/USER_GUIDE.md) · [Security](SECURITY.md) ·
+[Changelog](CHANGELOG.md).
 
 ## Local files
 
