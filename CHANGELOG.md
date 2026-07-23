@@ -248,7 +248,7 @@ covered by a test afterward:
   switching profiles does not generate retroactive notifications;
 - records the **API cost per sample** in history and shows the estimated
   cumulative 24 h and 7-day cost in the session details (a sum of increases,
-  robust to new sessions);
+  resilient to new sessions);
 - adds **Export… (CSV)** to the history window
   (`timestamp,five_hour_pct,seven_day_pct,session_cost_usd`);
 - replaces the default About panel with an animated authorial experience, with
@@ -260,7 +260,7 @@ covered by a test afterward:
   appearance-specific contrasts, and adaptive palettes across the gauges, charts,
   and About window;
 - distinguishes stale limits from an active session with no `rate_limits` and
-  swaps the ambiguous warning for short, actionable guidance;
+  swaps the ambiguous warning for short, practical guidance;
 - compacts the gauge texts and drops the year from reset times;
 - serializes concurrent state and history updates across Claude Code sessions,
   avoiding field loss and contention between pruning and ingestion;
