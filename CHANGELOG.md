@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.6.1 - 2026-07-23
+
+### Notifications
+
+- the menu bar icon now re-checks the system notification permission when the
+  panel is opened and when the app becomes active again, so changing it in System
+  Settings while the app is running is reflected immediately. Previously the state
+  was only read at launch and stayed stale until a restart.
+
 ## 3.6.0 - 2026-07-22
 
 ### Interface
