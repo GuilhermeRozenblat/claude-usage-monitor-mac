@@ -226,6 +226,13 @@ final class MenuBarApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
         // Reconsulta a permissão do sistema ao abrir: o utilizador pode tê-la
         // mudado nos Ajustes com o app já a correr, e a linha só era atualizada
         // no arranque.
+        //
+        // O painel é `.nonactivatingPanel`, por isso abri-lo não ativa o app e o
+        // macOS mantém o snapshot de `getNotificationSettings` preso no último
+        // estado ativo: uma desativação feita nos Ajustes do Sistema não seria
+        // vista. Ativar força o refresh do snapshot e dispara
+        // `didBecomeActiveNotification`, que reconsulta com o valor atual.
+        NSApp.activate(ignoringOtherApps: true)
         refreshNotificationStatus()
         panel.toggle(relativeTo: button)
     }
